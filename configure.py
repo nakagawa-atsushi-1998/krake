@@ -1,12 +1,15 @@
 import os
-import dotenv
+import glob
+from dotenv import load_dotenv
 
-dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
-dotenv.load_dotenv(verbose=True)
-dotenv.load_dotenv(dotenv_path)
+load_dotenv()
 
-BIBIT_API_ACCESS = os.environ.get("BIBIT_API_ACCESS")
-BYBIT_API_SECRET = os.environ.get("BYBIT_API_SECRET")
-COINCHECK_API_ACCESS = os.environ.get("COINCHECk_API_ACCESS")
-COINCHECK_API_SECRET = os.environ.get("COINCHECK_API_SECRET")
-LINE_API_TOKEN = os.environ.get("LINE_API_TOKEN")
+class PATH:
+    LOG = 'interface/log'
+    
+class KEY:
+    COINCHECK_API_ACCESS=os.getenv('COINCHECK_API_ACCESS')
+    COINCHECK_API_SECRET=os.getenv('COINCHECK_API_SECRET')
+    BYBIT_API_ACCESS=os.getenv('BYBIT_API_ACCESS')
+    BYBIT_API_SECRET=os.getenv('BYBIT_API_SECRET')
+    LINE_API_TOKEN=os.getenv('LINE_API_TOKEN')
