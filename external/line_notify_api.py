@@ -1,24 +1,15 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[ ]:
-
-
-#標準モジュール
-import datetime
-#外部モジュール
 import requests
 
-class Synapse:
+class HttpClient:
     def __init__(self):
-        self.__url:str='https://notify-api.line.me/api/notify'
+        self.URL:str='https://notify-api.line.me/api/notify'
     
-    def auth(
+    def authenticate(
         self,
-        token:str
+        TOKEN:str
     ):
-        self.__token = {
-            'Authorization': 'Bearer '+token
+        self.TOKEN = {
+            'Authorization':'Bearer '+TOKEN
         }
 
     def send_message(
@@ -29,11 +20,11 @@ class Synapse:
             'message': message
         }
         requests.post(
-            self.__url,
-            headers=self.__token,
+            self.URL,
+            headers=self.TOKEN,
             data=message_dict
         )
-        result = 'sent message.'
+        result = 'sent message'
         return result
     
     def send_image(
@@ -49,11 +40,10 @@ class Synapse:
                 'imageFile': binary_file
             }
             requests.post(
-                self.__url,
-                headers=self.__token,
+                self.URL,
+                headers=self.TOKEN,
                 params=message_dict,
                 files=image_dict
             )
-        result = 'sent image.'
+        result = 'sent image'
         return result
-
