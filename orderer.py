@@ -12,9 +12,9 @@ from external import (
     coincheck_api,
     line_notify_api,
 )
-#from stream import (
-#    logger
-#)
+from stream import (
+    logger
+)
 import warnings
 warnings.simplefilter('ignore')
 
