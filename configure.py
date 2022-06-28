@@ -21,6 +21,6 @@ class FORM:
         rsi = ['#22C', '#33D', '#44E', '#55F']
         macd = ['#738', '#849', '#95A', '#A6B']
     alpha = [7/10, 3/10, 2/10, 1/10]
-    label = ['Open','Close','BB2σ','MACD','RSI','EW'],
+    label = ['Open','Close','BB2σ','MACD','RSI']
 
 

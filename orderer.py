@@ -12,9 +12,11 @@ from external import (
     coincheck_api,
     line_notify_api,
 )
-from stream import (
-    logger
-)
+#from stream import (
+#    logger
+#)
+import warnings
+warnings.simplefilter('ignore')
 
 class Orderer:
     def __init__(
@@ -33,7 +35,7 @@ class Orderer:
                 time_scale=self.time_scale_list[counter],
             )
             self.crypto_list = self.crypto_list+[crypto_]
-        self.figure, self.axes = plt.subplots(3, 1, figsize=(8, 8))
+        self.figure, self.axes = plt.subplots(4, 1, figsize=(7.0, 8.0))
         plt.ion()
 
     def give_key_to_api(
@@ -92,42 +94,64 @@ class Orderer:
         self.crypto_list[index].calculate_bb()
         self.crypto_list[index].calculate_rsi()
         self.crypto_list[index].calculate_macd()
-    
-    def predict_data(self):
+
+    def predict_data(
+        self,
+    ):
         pass
-    
+
     def plot_graph(
         self,
     ):
         self.axes[0].clear()
         self.axes[1].clear()
         self.axes[2].clear()
-        for cnt in range(len(self.time_scale_list)):
+        self.axes[3].clear()
+        for cnt in range(len(self.time_scale_list)): #reversedへ変更
             rcnt = len(self.time_scale_list) - cnt - 1
             term = int(self.data_range_in_minute/60/self.time_scale_list[rcnt])
-            
             _datetime = self.crypto_list[rcnt].candle['Date'][-term:]
             _open = self.crypto_list[rcnt].candle['Open'][-term:]
             _close = self.crypto_list[rcnt].candle['Close'][-term:]
             _bbminus = self.crypto_list[rcnt].bb['-2σ'][-term:]
             _bbplus = self.crypto_list[rcnt].bb['+2σ'][-term:]
             _hist = self.crypto_list[rcnt].macd['Hist'][-term:]
+            _hrsi = self.crypto_list[rcnt].macd['HistRSI'][-term:]
             _rsi = self.crypto_list[rcnt].rsi['RSI'][-term:]
             self.axes[0].plot(_datetime, _close, color=COLOR.candle[0], alpha=ALPHA[rcnt])
             self.axes[0].plot(_datetime, _open, color=COLOR.candle[1], alpha=ALPHA[rcnt])
             self.axes[0].fill_between(_datetime, _bbminus, _bbplus, facecolor=COLOR.bb[cnt], alpha=ALPHA[rcnt])
             self.axes[1].fill_between(_datetime, _hist, 0, facecolor=COLOR.macd[cnt], alpha=ALPHA[rcnt])
             self.axes[2].plot(_datetime, _rsi, color=COLOR.rsi[cnt], alpha=ALPHA[rcnt])
+            self.axes[3].plot(_datetime, _hrsi, color=COLOR.rsi[cnt], alpha=ALPHA[rcnt])
         self.axes[2].fill_between(self.crypto_list[rcnt].candle['Date'], 0, 25, facecolor=COLOR.bb[0], alpha=3/10)
         self.axes[2].fill_between(self.crypto_list[rcnt].candle['Date'], 75, 100, facecolor=COLOR.bb[0], alpha=3/10)
+        self.axes[3].fill_between(self.crypto_list[rcnt].candle['Date'], 0, 25, facecolor=COLOR.bb[0], alpha=3/10)
+        self.axes[3].fill_between(self.crypto_list[rcnt].candle['Date'], 75, 100, facecolor=COLOR.bb[0], alpha=3/10)
         self.axes[0].grid(alpha=1/4)
         self.axes[1].grid(alpha=1/4)
         self.axes[2].grid(alpha=1/4)
+        self.axes[3].grid(alpha=1/4)
         self.figure.canvas.draw()
         self.figure.canvas.flush_events()
-    
-    def judge(self):
+
+    def judge_trade(self):
         pass
+
+    def mainloop(self):
+        while True:
+            now = datetime.datetime.now()
+            start_time = datetime.datetime(now.year, now.month, now.day, now.hour, now.minute, 0)
+            end_time = datetime.datetime(now.year, now.month, now.day, now.hour, now.minute, 0)+datetime.timedelta(minutes=1)
+            while datetime.datetime.now() < end_time:
+                plt.pause(5)
+            for counter in range(len(self.time_scale_list)):
+                self.collect_data(
+                    index=counter,
+                    start_time=int(end_time.timestamp())
+                )
+            print(self.crypto_list[0].candle.tail(1))
+            self.plot_graph()
 
 def main():
     orderer=Orderer()
@@ -139,9 +163,8 @@ def main():
         KEY.LINE_API_TOKEN,
     )
     orderer.initialize_data()
-    print(orderer.crypto_list[0].candle)
     orderer.plot_graph()
-    plt.pause(10)
+    orderer.mainloop()
 
 if __name__ == "__main__":
     KEY = configure.KEY

@@ -3,9 +3,9 @@ import pandas as pd
 class Crypto:
     class Column:
         candle = ['Date', 'Open', 'High', 'Low', 'Close', 'Volume']
-        bb = ['SMA', 'Std', '+2σ', '-2σ']
-        rsi = ['Diff', '+Ave', '-Ave', 'RSI']
-        macd = ['ShortMA', 'LongMA', 'MACD', 'Signal', 'Hist']
+        bb = ['Date', 'SMA', 'Std', '+2σ', '-2σ']
+        rsi = ['Date', 'Diff', '+Ave', '-Ave', 'RSI']
+        macd = ['Date', 'ShortMA', 'LongMA', 'MACD', 'Signal', 'Hist', 'HistRSI']
 
     def __init__(
         self,
@@ -24,6 +24,7 @@ class Crypto:
         last_row,
     ):
         self.candle = self.candle.append(last_row, ignore_index=True)
+        self.candle = self.candle[-179:]
 
     def calculate_bb(
         self,
@@ -35,6 +36,7 @@ class Crypto:
         self.bb['Std'] = self.candle['Close'].rolling(term).std()
         self.bb['+2σ'] = self.bb['SMA'] + coefficient*self.bb['Std']
         self.bb['-2σ'] = self.bb['SMA'] - coefficient*self.bb['Std']
+        self.bb = self.bb[-179:]
         
     def calculate_rsi(
         self,
@@ -47,6 +49,7 @@ class Crypto:
         self.rsi['+Ave'] = up.rolling(term).mean()
         self.rsi['-Ave'] = down.abs().rolling(term).mean()
         self.rsi['RSI'] = 100*self.rsi['+Ave']/(self.rsi['+Ave']+self.rsi['-Ave'])
+        self.rsi = self.rsi[-179:]
 
     def calculate_macd(
         self,
@@ -60,5 +63,12 @@ class Crypto:
         self.macd['MACD'] = self.macd['ShortMA'] - self.macd['LongMA']
         self.macd['Signal'] = self.macd['MACD'].rolling(signal_term).mean().round(3)
         self.macd['Hist'] = self.macd['MACD'] - self.macd['Signal']
+        diff = self.macd['Hist'].diff()
+        up = diff.copy(); up[up < 0] = 0
+        down = diff.copy(); down[down > 0] = 0
+        self.pave = up.rolling(15).mean()
+        self.mave = down.abs().rolling(15).mean()
+        self.macd['HistRSI'] = 100*self.pave/(self.pave+self.mave)
+        self.macd = self.macd[-179:]
 
 
