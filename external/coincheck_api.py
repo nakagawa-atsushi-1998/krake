@@ -66,7 +66,7 @@ class HttpClient:
         signature = self.gain_signature(message)
         headers = self.gain_header(nonce, signature)
         return requests.get(
-            self.host+path,
+            self.URL+path,
             headers=headers
         ).json()
 
@@ -77,7 +77,7 @@ class HttpClient:
         signature = self.gain_signature(message)
         headers = self.gain_header(nonce, signature)
         return requests.post(
-            self.url+path,
+            self.URL+path,
             data=params,
             headers=headers
         ).json()

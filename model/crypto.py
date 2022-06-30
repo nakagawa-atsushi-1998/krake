@@ -6,6 +6,7 @@ class Crypto:
         bb = ['Date', 'SMA', 'Std', '+2σ', '-2σ']
         rsi = ['Date', 'Diff', '+Ave', '-Ave', 'RSI']
         macd = ['Date', 'ShortMA', 'LongMA', 'MACD', 'Signal', 'Hist', 'HistRSI']
+        pal = ['Date', 'JPY', 'BTC', 'Total']
 
     def __init__(
         self,
@@ -18,12 +19,22 @@ class Crypto:
         self.bb = pd.DataFrame(columns=self.Column.bb)
         self.rsi = pd.DataFrame(columns=self.Column.rsi)
         self.macd = pd.DataFrame(columns=self.Column.macd)
+        self.pal = pd.DataFrame(columns=self.Column.pal)
+
+    def add_pal(
+        self,
+        last_row
+    ):  
+        self.pal = self.pal.append(last_row, ignore_index=True)
+        self.pal = self.pal.drop_duplicates()
+        self.pal = self.pal[-179:]
 
     def add_candle(
         self,
         last_row,
     ):
         self.candle = self.candle.append(last_row, ignore_index=True)
+        self.candle = self.candle.drop_duplicates()
         self.candle = self.candle[-179:]
 
     def calculate_bb(
