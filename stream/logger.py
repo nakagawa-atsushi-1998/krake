@@ -6,7 +6,7 @@ def set_logger(module_name):
     logger.handlers.clear()
 
     streamHandler = logging.StreamHandler()
-    fileHandler = logging.handlers.RotatingFileHandler("../data/output/system.log", maxBytes=10000, backupCount=5)
+    fileHandler = logging.handlers.RotatingFileHandler("../stream/system.log", maxBytes=10000, backupCount=5)
 
     formatter = logging.Formatter(
         "%(asctime)s [%(levelname)s] (%(filename)s | %(funcName)s | %(lineno)s) %(message)s")

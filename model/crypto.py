@@ -6,7 +6,6 @@ class Crypto:
         bb = ['Date', 'SMA', 'Std', '+2σ', '-2σ']
         rsi = ['Date', 'Diff', '+Ave', '-Ave', 'RSI']
         macd = ['Date', 'ShortMA', 'LongMA', 'MACD', 'Signal', 'Hist', 'HistRSI']
-        pal = ['Date', 'JPY', 'BTC', 'Total']
 
     def __init__(
         self,
@@ -19,15 +18,6 @@ class Crypto:
         self.bb = pd.DataFrame(columns=self.Column.bb)
         self.rsi = pd.DataFrame(columns=self.Column.rsi)
         self.macd = pd.DataFrame(columns=self.Column.macd)
-        self.pal = pd.DataFrame(columns=self.Column.pal)
-
-    def add_pal(
-        self,
-        last_row
-    ):  
-        self.pal = self.pal.append(last_row, ignore_index=True)
-        self.pal = self.pal.drop_duplicates()
-        self.pal = self.pal[-179:]
 
     def add_candle(
         self,
@@ -35,7 +25,9 @@ class Crypto:
     ):
         self.candle = self.candle.append(last_row, ignore_index=True)
         self.candle = self.candle.drop_duplicates()
-        self.candle = self.candle[-179:]
+        print(len(self.candle))
+        if 180 <= len(self.candle):
+            self.candle = self.candle[-179:]
 
     def calculate_bb(
         self,
@@ -47,7 +39,8 @@ class Crypto:
         self.bb['Std'] = self.candle['Close'].rolling(term).std()
         self.bb['+2σ'] = self.bb['SMA'] + coefficient*self.bb['Std']
         self.bb['-2σ'] = self.bb['SMA'] - coefficient*self.bb['Std']
-        self.bb = self.bb[-179:]
+        if 180 <= len(self.bb):
+            self.bb = self.bb[-179:]
         
     def calculate_rsi(
         self,
@@ -60,7 +53,8 @@ class Crypto:
         self.rsi['+Ave'] = up.rolling(term).mean()
         self.rsi['-Ave'] = down.abs().rolling(term).mean()
         self.rsi['RSI'] = 100*self.rsi['+Ave']/(self.rsi['+Ave']+self.rsi['-Ave'])
-        self.rsi = self.rsi[-179:]
+        if 180 <= len(self.rsi):
+            self.rsi = self.rsi[-179:]
 
     def calculate_macd(
         self,
@@ -80,6 +74,7 @@ class Crypto:
         self.pave = up.rolling(15).mean()
         self.mave = down.abs().rolling(15).mean()
         self.macd['HistRSI'] = 100*self.pave/(self.pave+self.mave)
-        self.macd = self.macd[-179:]
+        if 180 <= len(self.macd):
+            self.macd = self.macd[-179:]
 
 

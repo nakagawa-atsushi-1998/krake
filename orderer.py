@@ -41,7 +41,7 @@ class Orderer:
                 time_scale=self.time_scale_list[counter],
             )
             self.crypto_list = self.crypto_list+[crypto_]
-        self.figure, self.axes = plt.subplots(5, 1, figsize=(7.0, 8.0))
+        self.figure, self.axes = plt.subplots(3, 1, figsize=(7.0, 8.0))
         plt.ion()
 
     def give_key_to_api(
@@ -82,46 +82,35 @@ class Orderer:
         self,
         index,
         start_time,
-    ):  
+    ):
         result_candle_list = self.bybit_client.fetch_candle(
             start_time=start_time,
             time_scale=self.time_scale_list[index],
         )
         result_balance = self.coincheck_client.get_balance()
         for counter in range(len(result_candle_list)):
-            try:
-                result_candle = result_candle_list[counter]
-                result_candle_reshaped = {
-                    'Date': datetime.datetime.fromtimestamp(result_candle['open_time']),
-                    'Open': float(result_candle['open']),
-                    'High': float(result_candle['high']),
-                    'Low': float(result_candle['low']),
-                    'Close': float(result_candle['close']),
-                    'Volume': int(result_candle['volume']),
-                }
-                self.crypto_list[index].add_candle(last_row=result_candle_reshaped)
-            except:
-                print('ローソク足取得失敗')
-            try:
-                result_pal_reshaped = {
-                    'Date': datetime.datetime.fromtimestamp(result_candle['open_time']),
-                    'JPY': float(result_balance['jpy']),
-                    'BTC': float(result_balance['btc']),
-                    'Total': float(result_balance['jpy'])+float(result_balance['btc'])*float(result_candle['close'])*136.7
-                }
-                self.crypto_list[index].add_pal(last_row=result_pal_reshaped)
-            except:
-                print('損益取得失敗')
-        try:
-            self.crypto_list[index].calculate_bb()
-            self.crypto_list[index].calculate_rsi()
-            self.crypto_list[index].calculate_macd()
-            self.latest_time = self.crypto_list[0].candle.at[179, 'Date']
-            self.latest_price = self.crypto_list[0].candle.at[179, 'Close']
-            self.ask_price = self.balance_jpy = self.crypto_list[0].pal.at[179, 'JPY']
-            self.bid_amount = self.balance_btc = self.crypto_list[0].pal.at[179, 'BTC']
-        except:
-            print('テクニカル指標計算失敗')
+            result_candle = result_candle_list[counter]
+            result_candle_reshaped = {
+                'Date': datetime.datetime.fromtimestamp(result_candle['open_time']),
+                'Open': float(result_candle['open']),
+                'High': float(result_candle['high']),
+                'Low': float(result_candle['low']),
+                'Close': float(result_candle['close']),
+                'Volume': int(result_candle['volume']),
+            }
+            self.crypto_list[index].add_candle(last_row=result_candle_reshaped)
+        
+            result_pal_reshaped = {
+                'Date': datetime.datetime.fromtimestamp(result_candle['open_time']),
+                'JPY': float(result_balance['jpy']),
+                'BTC': float(result_balance['btc']),
+            }
+
+        self.crypto_list[index].calculate_bb()
+        self.crypto_list[index].calculate_rsi()
+        self.crypto_list[index].calculate_macd()
+        self.latest_time = self.crypto_list[0].candle.at[179, 'Date']
+        self.latest_price = self.crypto_list[0].candle.at[179, 'Close']
 
     def predict_data(
         self,
@@ -134,8 +123,6 @@ class Orderer:
         self.axes[0].clear()
         self.axes[1].clear()
         self.axes[2].clear()
-        self.axes[3].clear()
-        self.axes[4].clear()
         for cnt in range(len(self.time_scale_list)): #reversedへ変更
             rcnt = len(self.time_scale_list)-1-cnt
             term = int(self.data_range/60/self.time_scale_list[rcnt])
@@ -147,29 +134,21 @@ class Orderer:
             _hist = self.crypto_list[rcnt].macd['Hist'][-term:]
             _hrsi = self.crypto_list[rcnt].macd['HistRSI'][-term:]
             _rsi = self.crypto_list[rcnt].rsi['RSI'][-term:]
-            _profit_and_loss = self.crypto_list[rcnt].pal['Total'][-term:]
             self.axes[0].plot(_datetime, _high, color=COLOR.candle[0], alpha=ALPHA[rcnt])
             self.axes[0].plot(_datetime, _low, color=COLOR.candle[1], alpha=ALPHA[rcnt])
             self.axes[0].fill_between(_datetime, _bbminus, _bbplus, facecolor=COLOR.bb[cnt], alpha=ALPHA[rcnt])
             self.axes[1].fill_between(_datetime, _hist, 0, facecolor=COLOR.macd[cnt], alpha=ALPHA[rcnt])
             self.axes[2].plot(_datetime, _rsi, color=COLOR.rsi[cnt], alpha=ALPHA[rcnt])
-            self.axes[3].plot(_datetime, _hrsi, color=COLOR.rsi[cnt], alpha=ALPHA[rcnt])
         self.axes[2].fill_between(self.crypto_list[rcnt].candle['Date'], 0, 25, facecolor=COLOR.bb[0], alpha=3/10)
         self.axes[2].fill_between(self.crypto_list[rcnt].candle['Date'], 75, 100, facecolor=COLOR.bb[0], alpha=3/10)
-        self.axes[3].fill_between(self.crypto_list[rcnt].candle['Date'], 0, 25, facecolor=COLOR.bb[0], alpha=3/10)
-        self.axes[3].fill_between(self.crypto_list[rcnt].candle['Date'], 75, 100, facecolor=COLOR.bb[0], alpha=3/10)
-        self.axes[4].plot(_datetime, _profit_and_loss, alpha=ALPHA[rcnt])
         self.axes[0].grid(alpha=1/4)
         self.axes[1].grid(alpha=1/4)
         self.axes[2].grid(alpha=1/4)
-        self.axes[3].grid(alpha=1/4)
-        self.axes[4].grid(alpha=1/4)
         self.figure.canvas.draw()
         self.figure.canvas.flush_events()
 
     def judge_trade(self):
         pass
-
 
     def buy(self):
         result = self.coincheck_client.post_order(
@@ -192,10 +171,9 @@ class Orderer:
             now = datetime.datetime.now()
             last = self.latest_time
             start_time = datetime.datetime(last.year, last.month, last.day, last.hour, last.minute, 0)
-            print(start_time)
             end_time = datetime.datetime(now.year, now.month, now.day, now.hour, now.minute, 0)+datetime.timedelta(minutes=1)
             while datetime.datetime.now() < end_time:
-                plt.pause(5)
+                plt.pause(3)
             for counter in range(len(self.time_scale_list)):
                 self.collect_data(
                     index=counter,
