@@ -89,9 +89,7 @@ class Orderer:
     def plot_graph(
         self,
     ):
-        self.axes[0].clear()
-        self.axes[1].clear()
-        self.axes[2].clear()
+        [self.axes[counter].clear() for counter in range(0, 2)]
         for cnt in range(len(self.time_scale_list)): #reversedへ変更
             rcnt = len(self.time_scale_list)-1-cnt
             term = int(self.data_range/60/self.time_scale_list[rcnt])
@@ -105,15 +103,13 @@ class Orderer:
             _rsi = self.crypto_list[rcnt].rsi['RSI'][-term:]
             self.axes[0].plot(_datetime, _high, color=COLOR.candle[0], alpha=ALPHA[rcnt])
             self.axes[0].plot(_datetime, _low, color=COLOR.candle[1], alpha=ALPHA[rcnt])
-            self.axes[0].scatter(_datetime, _ps, alpha=ALPHA[rcnt])
+            self.axes[0].scatter(_datetime, _ps, c=COLOR.ps[cnt], s=1/2, alpha=ALPHA[rcnt])
             self.axes[0].fill_between(_datetime, _bbminus, _bbplus, facecolor=COLOR.bb[cnt], alpha=ALPHA[rcnt])
-            self.axes[1].fill_between(_datetime, _hist, 0, facecolor=COLOR.macd[cnt], alpha=ALPHA[rcnt])
-            self.axes[2].plot(_datetime, _rsi, color=COLOR.rsi[cnt], alpha=ALPHA[rcnt])
-        self.axes[2].fill_between(self.crypto_list[rcnt].ohlcv['Datetime'], 0, 25, facecolor=COLOR.bb[0], alpha=3/10)
-        self.axes[2].fill_between(self.crypto_list[rcnt].ohlcv['Datetime'], 75, 100, facecolor=COLOR.bb[0], alpha=3/10)
-        self.axes[0].grid(alpha=1/4)
-        self.axes[1].grid(alpha=1/4)
-        self.axes[2].grid(alpha=1/4)
+            #self.axes[1].fill_between(_datetime, _hist, 0, facecolor=COLOR.macd[cnt], alpha=ALPHA[rcnt])
+            #self.axes[2].plot(_datetime, _rsi, color=COLOR.rsi[cnt], alpha=ALPHA[rcnt])
+        #self.axes[2].fill_between(self.crypto_list[rcnt].ohlcv['Datetime'], 0, 25, facecolor=COLOR.bb[0], alpha=3/10)
+        #self.axes[2].fill_between(self.crypto_list[rcnt].ohlcv['Datetime'], 75, 100, facecolor=COLOR.bb[0], alpha=3/10)
+        [self.axes[counter].grid(alpha=1/4) for counter in range(0, 2)]
         self.figure.canvas.draw()
         self.figure.canvas.flush_events()
 

@@ -16,11 +16,15 @@ class KEY:
 
 class FORM:
     class COLOR:
+        ohlcv = ['#5F5', '#F55', '#55F', '#888']
         candle = ['#5F5', '#F55', '#55F', '#888']
         bb = ['#AAA', '#BBB', '#CCC', '#DDD']
+        ps = ['#333', '#444', '#555', '#666']
+        dmi = ['#22C', '#33D', '#44E', '#55F']
         rsi = ['#22C', '#33D', '#44E', '#55F']
+        rci = ['#22C', '#33D', '#44E', '#55F']
         macd = ['#738', '#849', '#95A', '#A6B']
     alpha = [7/10, 3/10, 2/10, 1/10]
-    label = ['Open','Close','BB2σ','MACD','RSI']
+    label = ['Open','Close','BB','MACD','RSI']
 
 

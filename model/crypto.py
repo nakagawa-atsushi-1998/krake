@@ -1,5 +1,6 @@
 from xml.sax.handler import property_dom_node
 from xmlrpc.client import _datetime_type
+import numpy as np
 import pandas as pd
 
 class Crypto:
@@ -131,17 +132,17 @@ class Crypto:
         self.af = self.initial_af = 0.02
         self.ep_list = [self.ep]
         self.af_list = [self.af]
-        self.sar_list = [self.ohlcv['Low'][0]]
+        self.sar_list = [low_]
         for counter in range(len(self.ohlcv)):
             high_ = self.ohlcv['High'].iloc[counter]
             low_ = self.ohlcv['Low'].iloc[counter]
             parabolic_ = self.sar_list[-1]
-            if self.bull and (parabolic_ > low_):
-                self.ps_is_touched=  True
-            elif not self.bull and (parabolic_ < high_):
+            if ((self.bull == True) and (parabolic_ > low_)) or\
+                ((self.bull != True) and (parabolic_ < high_)):
                 self.ps_is_touched = True
             else:
                 self.ps_is_touched = False
+            
             if self.ps_is_touched == True:
                 self.sar = self.ep
                 self.af = self.initial_af
@@ -168,9 +169,6 @@ class Crypto:
                 self.af_list.append(self.af)
                 self.sar_list.append(self.sar)
         self.ps['Datetime'] = self.ohlcv['Datetime']
-        #self.ps['EP'] = ep = pd.Series([self.ep_list], index=['EP'])
-        #self.ps['AF'] = af = pd.Series([self.af_list], index=['AF'])
-        #self.ps['SAR'] = sar = pd.Series([self.sar_list], index=['SAR'])
         self.ps['EP'] = self.ep_list
         self.ps['AF'] = self.af_list
         self.ps['SAR'] = self.sar_list
@@ -183,12 +181,13 @@ class Crypto:
         high_ = self.ohlcv['High'].iloc[-1]
         low_ = self.ohlcv['Low'].iloc[-1]
         parabolic_ = self.sar_list[-1]
-        if self.bull and (parabolic_ > low_): #強気相場かつパラボリックが安値以上
+        if (self.bull == True) and (parabolic_ > low_): #強気相場かつパラボリックが安値以上
             self.ps_is_touched=  True
-        elif not self.bull and (parabolic_ < high_): #弱気相場かつパラボリックが高値以下
+        elif (self.bull != True) and (parabolic_ < high_): #弱気相場かつパラボリックが高値以下
             self.ps_is_touched = True
         else:
             self.ps_is_touched = False
+
         if self.ps_is_touched == True: #パラボリックが触れた場合
             self.sar_list = self.ep
             self.af = self.initial_af
@@ -205,12 +204,12 @@ class Crypto:
             elif not self.bull and self.ep > low_: #弱気相場かつ極大値以上の場合
                 self.ep = low_
                 self.af = min(self.af + self.initial_af, max_af)
-            self.sar_list = self.sar_list + self.af * (self.ep - self.sar_list)        
+            self.sar = self.sar + self.af * (self.ep - self.sar)        
         ps_dict = {
             'Datetime':datetime_,
             'EP':self.ep,
             'AF':self.af,
-            'SAR':self.temp_sar,
+            'SAR':self.sar,
         }
         self.ps = self.ps.append(ps_dict, ignore_index=True)
 
@@ -326,15 +325,23 @@ class Crypto:
         if diff_ >= 0:
             p_diff = diff_
             m_diff = 0
-        elif diff_ > 0:
+        elif diff_ < 0:
             p_diff = 0
             m_diff = diff_
-        p_diff_list = self.rsi['pDiff'][-(term-1):]
-        m_diff_list = self.rsi['mDiff'][-(term-1):]
-        p_diff_list = p_diff_list.append(p_diff, index=['pDiff'], ignore_index=True)
-        m_diff_list = m_diff_list.append(m_diff, index=['mDiff'], ignore_index=True)
-        p_ave = p_diff_list.mean()
-        m_ave = m_diff_list.abs().mean()
+        p_diff_list = self.rsi['pDiff'][-(term-1):].to_list()
+        m_diff_list = self.rsi['mDiff'][-(term-1):].to_list()
+        p_diff_list = p_diff_list.append(
+            p_diff,
+            #index=['pDiff'],
+            #ignore_index=True
+        )
+        m_diff_list = m_diff_list.append(
+            m_diff,
+            #index=['mDiff'],
+            #ignore_index=True
+        )
+        p_ave = pd.DataFrame(p_diff_list).mean()
+        m_ave = pd.DataFrame(m_diff_list).abs().mean()
         rsi = 100*p_ave/(p_ave+m_ave)
         rsi_dict = {
             'Datetime':datetime_,
@@ -359,22 +366,25 @@ class Crypto:
         long_term=26, # 19,26,39
         signal_term=9, # 4,9,12
     ):
-        datetime_ = self.ohlcv['Date'].iloc[-1]
-        close_list = self.ohlcv['Close'][-long_term:]
+        datetime_ = self.ohlcv['Datetime'].iloc[-1]
+        close_list = self.ohlcv['Close']
         short_ema = close_list.ewm(short_term).mean().iloc[-1]
         long_ema = close_list.ewm(long_term).mean().iloc[-1]
         macd = short_ema - long_ema
-        macd_list = self.macd['MACD'][-(signal_term-1):]
-        macd_list = macd_list.append(macd, index=['MACD'], ignore_index=True)
-        signal = macd_list.mean()
+        macd_list = self.macd['MACD'][-signal_term:].to_list()
+        print(short_ema)
+        print(long_ema)
+        print(macd_list)
+        macd_list = macd_list.append(macd)
+        signal = pd.DataFrame(macd_list).mean()
         hist = macd - signal
-        before_hist = self.macd['Hist'].iloc[-2]
-        if hist > before_hist:
-            crossover = 1
-        elif hist < before_hist:
-            crossover = -1
-        else:
-            crossover = 0
+        before_hist = self.macd['Hist'].iloc[-1]
+        #if hist > before_hist:
+        #    crossover = 1
+        #elif hist < before_hist:
+        #    crossover = -1
+        #else:
+        #    crossover = 0
         macd_dict = {
             'Datetime':datetime_,
             'ShortEMA':short_ema,
@@ -382,9 +392,9 @@ class Crypto:
             'MACD':macd,
             'Signal':signal,
             'Hist':hist,
-            'Crossover':crossover,
+            #'Crossover':crossover,
         }
-        self.macd = self.macd.append(macd, ignore_index=True)
+        self.macd = self.macd.append(macd_dict, ignore_index=True)
 
     def trim(
         self,
