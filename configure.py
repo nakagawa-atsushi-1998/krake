@@ -1,11 +1,12 @@
 import os
 from dotenv import load_dotenv
-
 load_dotenv()
 
+
 class PATH:
-    LOG = 'stream/.log'
-    DB = 'external/.db'
+    cd=str(os.path.dirname(__file__))
+    LOG=cd+'stream/log/'
+    DB=cd+'external/db/'
 
 class KEY:
     COINCHECK_API_ACCESS=os.getenv('COINCHECK_API_ACCESS')

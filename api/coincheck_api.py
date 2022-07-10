@@ -8,13 +8,12 @@ import websocket
 import threading
 import numpy as np
 import pandas as pd
-import matplotlib
-#matplotlib.use('tkagg')
-matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-import crypto
+import matplotlib; matplotlib.use('Agg')
+#matplotlib.use('tkagg')
 import warnings; warnings.simplefilter('ignore')
-import os; cd=os.path.abspath(".")
+import os; cd=os.path.dirname(__file__)
+from model import crypto
 
 crypto_ = crypto.Crypto()
 COLUMN = crypto_.Column()
@@ -424,10 +423,14 @@ class WebsocketClient:
             print(self.start_time)
             while datetime.datetime.now() < self.end_time:
                 time.sleep(1)
+                print('.', end='')
             self.calculate_ohlcv()
-            if len(self.ohlcv) >= 15:
-                self.calculate_bb()
-                print(self.bb)
+            self.lock.acquire() #施錠
+            self.plot_graph()
+            self.lock.release() #解錠
+            #if len(self.ohlcv) >= 15:
+            #    self.calculate_bb()
+            #    print(self.bb)
 
     def forget_trade(self):
         self.trade=pd.DataFrame(columns=COLUMN.trade)
@@ -446,11 +449,11 @@ class WebsocketClient:
                 'Diff':None
             }
         else:
-            open_=self.trade['Price'].iloc[0]
-            close_=self.trade['Price'].iloc[-1]
-            high_=self.trade['Price'].max()
-            low_=self.trade['Price'].min()
-            volume_=self.trade['Volume'].sum()
+            open_=self.trade['Rate'].iloc[0]
+            close_=self.trade['Rate'].iloc[-1]
+            high_=self.trade['Rate'].max()
+            low_=self.trade['Rate'].min()
+            volume_=self.trade['Amount'].sum()
             diff_=close_-open_
             #if close_ >= open_:
                 #direction_=1
@@ -470,9 +473,8 @@ class WebsocketClient:
             self.ohlcv_dict,
             ignore_index=True)
         self.forget_trade()
-        print(self.ohlcv)
-        self.plot_graph()
         self.lock.release() #解錠
+        print(self.ohlcv)
 
     def calculate_bb(
         self,
@@ -507,44 +509,9 @@ class WebsocketClient:
         print(4)
         self.fig.canvas.draw()
         print(5)
-        self.fig.savefig(cd+'/figure.png')
+        self.fig.savefig(str(cd)+'/figure/latest.png')
         print(6)
         #self.figure.canvas.draw()
         #self.figure.canvas.flush_events()
 
-    def trade(self):    #スレッド③
-        buy_execute=sell_execute=False
-        possition='none'
-        while len(self.trade) >= 15:
-            time.sleep(15)
-        while True:
-            #ポジション無しの場合
-            if possition == 'none':
-                #口座情報取得
-                possition='buy&sell'
-            #両ポジションの場合
-            elif possition == 'buy&sell':
-                #約定履歴取得
-                #両注文が約定
-                if (sell_execute == True) and\
-                    (buy_execute == True):
-                    possition='none'
-                elif sell_execute == True:
-                    pass
-                elif buy_execute == True:
-                    pass
-                time.sleep(5)
-            #買いポジションの場合
-            elif possition == 'buy':
-                #約定履歴取得
-                if sell_execute == True:
-                    possition='none'
-            #売りポジションの場合
-            elif possition == 'sell':
-                #約定履歴取得
-                if buy_execute == True:
-                    possition='none'
-            print(possition)
-            time.sleep(5)
-
-ws=WebsocketClient()
+#ws=WebsocketClient()

@@ -1,6 +1,7 @@
 import time
 import tkinter as tk
 from PIL import Image, ImageTk
+import os; cd=os.path.dirname(__file__)
 
 class GUI(tk.Frame):
     def __init__(self, frame):
@@ -15,18 +16,20 @@ class GUI(tk.Frame):
         self.frame.title("krake") #キャンバスのサイズを取得
 
     def create_widgets(self):
-        self.frame.canvas=tk.Canvas(self.frame, width=800, height=300)
-        self.frame.canvas.pack()
-        self.frame.canvas.create_image(300,300, image=tk.PhotoImage(file="figure01.png"))
+        self.read_image1=Image.open(str(cd)+'/figure/latest.png')
+        self.image1=ImageTk.PhotoImage(image=self.read_image1)
+
+        self.canvas1=tk.Canvas(self, width=720, height=840, background="white")
+        self.canvas1.create_image(0,-20,anchor='nw',image=self.image1)
+        self.canvas1.pack()
 
     def main(self):
-        while True:
-            time.sleep(10)
-            self.frame.mainloop()
+        self.frame.mainloop()
 
-"""
+
 def main():
-    gui = GUI(tk.Tk())
-    gui.mainloop()
+    root=tk.Tk()
+    gui = GUI(root)
+    gui.main()
 main()
-"""
+
