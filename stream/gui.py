@@ -16,9 +16,8 @@ class GUI(tk.Frame):
         self.frame.title("krake") #キャンバスのサイズを取得
 
     def create_widgets(self):
-        self.read_image1=Image.open(str(cd)+'/figure/latest.png')
+        self.read_image1=Image.open(str(cd)+'/graph/latest.png')
         self.image1=ImageTk.PhotoImage(image=self.read_image1)
-
         self.canvas1=tk.Canvas(self, width=720, height=840, background="white")
         self.canvas1.create_image(0,-20,anchor='nw',image=self.image1)
         self.canvas1.pack()
@@ -26,10 +25,8 @@ class GUI(tk.Frame):
     def main(self):
         self.frame.mainloop()
 
-'''
 def main():
     root=tk.Tk()
     gui = GUI(root)
     gui.main()
 main()
-'''

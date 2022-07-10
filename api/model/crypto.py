@@ -18,7 +18,8 @@ class Crypto:
             'High', #高音
             'Low',  #安値
             'Close',#終値
-            'Volume'#出来高
+            'Volume',#出来高
+            'Diff'
         ] #OHLCV
         candle = [
             'Datetime', #日時

@@ -18,9 +18,9 @@ from .model import (
     order
 )
 
-account=account.Account(); aCol=account.Column()
-crypto=crypto.Crypto(); cCol=crypto.Column()
-order=order.Order(); oCol=order.Column()
+aCol=account.Column()
+cCol=crypto.Column()
+oCol=order.Column()
 
 class Path:
     rate='/api/exchange/orders/rate'
@@ -31,76 +31,27 @@ class Path:
     cancel_status='/api/exchange/orders/cancel_status'
     unsettled_order='/api/exchange/orders/opens'
 
-'''
-class Orderer:
-    def __init__(self):
-        self.basic_price:float #基準値
-        self.tolerance_pct:float #許容誤差比率
-        self.upper_tolerance:float #許容上限値
-        self.lower_tolerance:float #許容下限値
-    
-    def mainloop(self):    #スレッド③
-        buy_execute=sell_execute=False
-        possition='none'
-        while len(self.trade) >= 15:
-            time.sleep(15)
-        while True:
-            #ポジション無しの場合
-            if possition == 'none':
-                #口座情報取得
-                possition='buy&sell'
-            #両ポジションの場合
-            elif possition == 'buy&sell':
-                #約定履歴取得
-                #両注文が約定
-                if (sell_execute == True) and (buy_execute == True):
-                    possition='none'
-                elif sell_execute == True:
-                    pass
-                elif buy_execute == True:
-                    pass
-                time.sleep(5)
-            #買いポジションの場合
-            elif possition == 'buy':
-                #約定履歴取得
-                if sell_execute == True:
-                    possition='none'
-            #売りポジションの場合
-            elif possition == 'sell':
-                #約定履歴取得
-                if buy_execute == True:
-                    possition='none'
-            print(possition)
-            time.sleep(5)
-'''
-
-
 class WebsocketClient:
     def __init__(
         self,
         pair='btc_jpy',
         time_scale_list=[1,5,15,30]
-        
     ):
-        self.URL='wss://ws-api.coincheck.com/'
+        self.WURL='wss://ws-api.coincheck.com/'
         self.pair=pair
         self.storage_term=60 #保存期間
-
         self.request_json = json.dumps({
             'type':'subscribe', 
             'channel':pair+'-trades'
         })
         self.lock=threading.Lock()
-        self.figure,self.axes=plt.subplots(
-            3, 1, figsize=(7.0, 8.0))
-        self.trade=pd.DataFrame(columns=oCol.post)
-        self.ohlcv=pd.DataFrame(columns=cCol.ohlcv)
-        self.bb=pd.DataFrame(columns=cCol.bb)
-        self.rsi=pd.DataFrame(columns=cCol.rsi)
+        self.order=order.Order()
+        self.crypto=crypto.Crypto()
+        self.account=account.Account()
 
     def connect(self):  #スレッド①
         self.session=websocket.WebSocketApp(
-            self.URL,
+            self.WURL,
             on_open=self.__on_open,
             on_close=self.__on_close,
             on_error=self.__on_error,
@@ -108,46 +59,37 @@ class WebsocketClient:
         )
         print('session connect.')
         self.session.run_forever()
-
     #接続
     def __on_open(self, ws):
         self.__opened=True
         self.session.send(
             self.request_json)
         print('opened.')
-
     #接続エラー
     def __on_error(self, ws, error):
         print('incorrect.')
         self.__reconnect()
-
     #再接続
     def __reconnect(self):
         self.__exit()
         time.sleep(1)
         self.connect()
-
     #離脱時
     def __exit(self):
         self.session.close()
-
     #切断時
     def __on_close(self, ws):
         print('session closed.')
-    
     #メッセージ受信時
     def __on_message(self, ws, message):
         trade_dict=self.form_trade(message)
-        self.trade=self.trade.append(
+        self.crypto.trade=self.crypto.trade.append(
             trade_dict,
             ignore_index=True
         )
-        print(self.trade.values[-1])
-        
-    def form_trade(
-        self,
-        message
-    ):
+        print(self.crypto.trade.values[-1])
+    
+    def form_trade(self, message):
         datetime_=datetime.datetime.now()
         element=message.strip('[ ]').replace('"', '').split(',')
         trade_dict={
@@ -174,7 +116,6 @@ class WebsocketClient:
             print(self.start_time)
             while datetime.datetime.now() < self.end_time:
                 time.sleep(1)
-                print('.', end='')
             self.calculate_ohlcv()
             self.lock.acquire() #施錠
             self.plot_graph()
@@ -184,11 +125,11 @@ class WebsocketClient:
             #    print(self.bb)
 
     def forget_trade(self):
-        self.trade=pd.DataFrame(columns=oCol.trade)
+        self.crypto.trade=pd.DataFrame(columns=cCol['trade'])
         
     def calculate_ohlcv(self):
         datetime_=self.start_time
-        if len(self.trade) == 0:
+        if len(self.crypto.trade) == 0:
             print('incorrect at calculate_ohlcv')
             self.ohlcv_dict={
                 'Datetime':datetime_,
@@ -200,16 +141,12 @@ class WebsocketClient:
                 'Diff':None
             }
         else:
-            open_=self.trade['Rate'].iloc[0]
-            close_=self.trade['Rate'].iloc[-1]
-            high_=self.trade['Rate'].max()
-            low_=self.trade['Rate'].min()
-            volume_=self.trade['Amount'].sum()
+            open_=self.crypto.trade['Rate'].iloc[0]
+            close_=self.crypto.trade['Rate'].iloc[-1]
+            high_=self.crypto.trade['Rate'].max()
+            low_=self.crypto.trade['Rate'].min()
+            volume_=self.crypto.trade['Amount'].sum()
             diff_=close_-open_
-            #if close_ >= open_:
-                #direction_=1
-            #else:
-                #direction_=-1
             self.ohlcv_dict={
                 'Datetime':datetime_,
                 'Open':open_,
@@ -220,32 +157,32 @@ class WebsocketClient:
                 'Diff':diff_
             }
         self.lock.acquire() #施錠
-        self.ohlcv=self.ohlcv.append(
+        self.crypto.ohlcv=self.crypto.ohlcv.append(
             self.ohlcv_dict,
             ignore_index=True)
         self.forget_trade()
         self.lock.release() #解錠
-        print(self.ohlcv)
+        print(self.crypto.ohlcv)
 
     def calculate_bb(
         self,
         term=20,
         coefficient=2
     ):
-        datetime_ = self.start_time
-        close_list = self.ohlcv['Close'][-term:]
-        sma = close_list.mean()
-        std = close_list.std()
-        p_bb = sma+coefficient*std
-        m_bb = sma-coefficient*std
-        bb_dict = {
+        datetime_=self.start_time
+        close_list=self.crypto.ohlcv['Close'][-term:]
+        sma=close_list.mean()
+        std=close_list.std()
+        p_bb= sma+coefficient*std
+        m_bb=sma-coefficient*std
+        bb_dict={
             'Datetime':datetime_,
             'SMA':sma,
             'Std':std,
             'pBB':p_bb,
             'mBB':m_bb,
         }
-        self.bb = self.bb.append(bb_dict, ignore_index=True)
+        self.crypto.bb=self.crypto.bb.append(bb_dict, ignore_index=True)
 
     def plot_graph(self):
         print(1)
@@ -260,8 +197,9 @@ class WebsocketClient:
         print(4)
         self.fig.canvas.draw()
         print(5)
-        self.fig.savefig(str(cd)+'/figure/latest.png')
+        self.fig.savefig(str(cd)+'/graph/ohlcv.png')
         print(6)
+
 
 
 class HttpClient(WebsocketClient):
