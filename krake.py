@@ -22,8 +22,8 @@ class Core:
     def __init__(
         self,
     ):
-        self.gui=gui.GUI(tkinter.Tk())
-        self.orderer=Orderer()
+        pass
+        #self.gui=gui.GUI(tkinter.Tk())
 
     def give_key_to_api(
         self,
@@ -54,7 +54,7 @@ class Core:
         with ThreadPoolExecutor(max_workers=3) as executor:
             executor.submit(self.ccwc.connect)
             executor.submit(self.ccwc.collect)
-            executor.submit(self.gui.main)
+            #executor.submit(self.gui.main)
 
 def main():
     core=Core()
@@ -75,45 +75,3 @@ if __name__ == "__main__":
     main()
 
 
-
-class Orderer:
-    def __init__(self):
-        self.basic_price:float #基準値
-        self.tolerance_pct:float #許容誤差比率
-        self.upper_tolerance:float #許容上限値
-        self.lower_tolerance:float #許容下限値
-    
-    def mainloop(self):    #スレッド③
-        buy_execute=sell_execute=False
-        possition='none'
-        while len(self.trade) >= 15:
-            time.sleep(15)
-        while True:
-            #ポジション無しの場合
-            if possition == 'none':
-                #口座情報取得
-                possition='buy&sell'
-            #両ポジションの場合
-            elif possition == 'buy&sell':
-                #約定履歴取得
-                #両注文が約定
-                if (sell_execute == True) and (buy_execute == True):
-                    possition='none'
-                elif sell_execute == True:
-                    pass
-                elif buy_execute == True:
-                    pass
-                time.sleep(5)
-            #買いポジションの場合
-            elif possition == 'buy':
-                #約定履歴取得
-                if sell_execute == True:
-                    possition='none'
-            #売りポジションの場合
-            elif possition == 'sell':
-                #約定履歴取得
-                if buy_execute == True:
-                    possition='none'
-            print(possition)
-            time.sleep(5)
-    

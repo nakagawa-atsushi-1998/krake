@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 import matplotlib; matplotlib.use('Agg') #matplotlib.use('tkagg')
 import warnings; warnings.simplefilter('ignore')
 import os; cd=os.path.dirname(__file__); os.chdir(cd)
-from model import (
+from .model import (
     account,
     crypto,
     order
@@ -30,6 +30,49 @@ class Path:
     transaction='/api/exchange/orders/transactions'
     cancel_status='/api/exchange/orders/cancel_status'
     unsettled_order='/api/exchange/orders/opens'
+
+'''
+class Orderer:
+    def __init__(self):
+        self.basic_price:float #基準値
+        self.tolerance_pct:float #許容誤差比率
+        self.upper_tolerance:float #許容上限値
+        self.lower_tolerance:float #許容下限値
+    
+    def mainloop(self):    #スレッド③
+        buy_execute=sell_execute=False
+        possition='none'
+        while len(self.trade) >= 15:
+            time.sleep(15)
+        while True:
+            #ポジション無しの場合
+            if possition == 'none':
+                #口座情報取得
+                possition='buy&sell'
+            #両ポジションの場合
+            elif possition == 'buy&sell':
+                #約定履歴取得
+                #両注文が約定
+                if (sell_execute == True) and (buy_execute == True):
+                    possition='none'
+                elif sell_execute == True:
+                    pass
+                elif buy_execute == True:
+                    pass
+                time.sleep(5)
+            #買いポジションの場合
+            elif possition == 'buy':
+                #約定履歴取得
+                if sell_execute == True:
+                    possition='none'
+            #売りポジションの場合
+            elif possition == 'sell':
+                #約定履歴取得
+                if buy_execute == True:
+                    possition='none'
+            print(possition)
+            time.sleep(5)
+'''
 
 class HttpClient:
     def __init__(
@@ -189,7 +232,7 @@ class HttpClient:
         self,
         trades,
     ):
-        trade_df=pd.DataFrame(columns=COLUMN.trade)
+        trade_df=pd.DataFrame(columns=oCol.post)
         for trade in reversed(trades):
             trade_dict={
                 'ID':int(trade['id']), #int
@@ -346,10 +389,10 @@ class WebsocketClient:
         self.lock=threading.Lock()
         self.figure,self.axes=plt.subplots(
             3, 1, figsize=(7.0, 8.0))
-        self.trade=pd.DataFrame(columns=COLUMN.trade)
-        self.ohlcv=pd.DataFrame(columns=COLUMN.ohlcv)
-        self.bb=pd.DataFrame(columns=COLUMN.bb)
-        self.rsi=pd.DataFrame(columns=COLUMN.rsi)
+        self.trade=pd.DataFrame(columns=oCol.post)
+        self.ohlcv=pd.DataFrame(columns=cCol.ohlcv)
+        self.bb=pd.DataFrame(columns=cCol.bb)
+        self.rsi=pd.DataFrame(columns=cCol.rsi)
 
     def connect(self):  #スレッド①
         self.session=websocket.WebSocketApp(
@@ -515,7 +558,5 @@ class WebsocketClient:
         print(5)
         self.fig.savefig(str(cd)+'/figure/latest.png')
         print(6)
-        #self.figure.canvas.draw()
-        #self.figure.canvas.flush_events()
 
-#ws=WebsocketClient()
+
