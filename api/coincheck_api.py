@@ -74,17 +74,203 @@ class Orderer:
             time.sleep(5)
 '''
 
-class HttpClient:
+
+class WebsocketClient:
     def __init__(
         self,
         pair='btc_jpy',
-        price=0,
-        amount=0
+        time_scale_list=[1,5,15,30]
+        
     ):
+        self.URL='wss://ws-api.coincheck.com/'
+        self.pair=pair
+        self.storage_term=60 #保存期間
+
+        self.request_json = json.dumps({
+            'type':'subscribe', 
+            'channel':pair+'-trades'
+        })
+        self.lock=threading.Lock()
+        self.figure,self.axes=plt.subplots(
+            3, 1, figsize=(7.0, 8.0))
+        self.trade=pd.DataFrame(columns=oCol.post)
+        self.ohlcv=pd.DataFrame(columns=cCol.ohlcv)
+        self.bb=pd.DataFrame(columns=cCol.bb)
+        self.rsi=pd.DataFrame(columns=cCol.rsi)
+
+    def connect(self):  #スレッド①
+        self.session=websocket.WebSocketApp(
+            self.URL,
+            on_open=self.__on_open,
+            on_close=self.__on_close,
+            on_error=self.__on_error,
+            on_message=self.__on_message,
+        )
+        print('session connect.')
+        self.session.run_forever()
+
+    #接続
+    def __on_open(self, ws):
+        self.__opened=True
+        self.session.send(
+            self.request_json)
+        print('opened.')
+
+    #接続エラー
+    def __on_error(self, ws, error):
+        print('incorrect.')
+        self.__reconnect()
+
+    #再接続
+    def __reconnect(self):
+        self.__exit()
+        time.sleep(1)
+        self.connect()
+
+    #離脱時
+    def __exit(self):
+        self.session.close()
+
+    #切断時
+    def __on_close(self, ws):
+        print('session closed.')
+    
+    #メッセージ受信時
+    def __on_message(self, ws, message):
+        trade_dict=self.form_trade(message)
+        self.trade=self.trade.append(
+            trade_dict,
+            ignore_index=True
+        )
+        print(self.trade.values[-1])
+        
+    def form_trade(
+        self,
+        message
+    ):
+        datetime_=datetime.datetime.now()
+        element=message.strip('[ ]').replace('"', '').split(',')
+        trade_dict={
+            'Datetime':datetime_,
+            'ID':int(element[0]),
+            'Rate':float(element[2]),
+            'Amount':float(element[3]),
+            'Type':element[4],
+        }
+        time.sleep(1/5)
+        return trade_dict
+
+    def collect(self):  #スレッド②
+        while True:
+            now=datetime.datetime.now()
+            self.start_time=datetime.datetime(
+                now.year, now.month, now.day,
+                now.hour, now.minute, 0
+            )
+            self.end_time=datetime.datetime(
+                now.year, now.month, now.day,
+                now.hour, now.minute, 0
+            )+datetime.timedelta(minutes=1)
+            print(self.start_time)
+            while datetime.datetime.now() < self.end_time:
+                time.sleep(1)
+                print('.', end='')
+            self.calculate_ohlcv()
+            self.lock.acquire() #施錠
+            self.plot_graph()
+            self.lock.release() #解錠
+            #if len(self.ohlcv) >= 15:
+            #    self.calculate_bb()
+            #    print(self.bb)
+
+    def forget_trade(self):
+        self.trade=pd.DataFrame(columns=oCol.trade)
+        
+    def calculate_ohlcv(self):
+        datetime_=self.start_time
+        if len(self.trade) == 0:
+            print('incorrect at calculate_ohlcv')
+            self.ohlcv_dict={
+                'Datetime':datetime_,
+                'Open':None,
+                'High':None,
+                'Low':None,
+                'Close':None,
+                'Volume':None,
+                'Diff':None
+            }
+        else:
+            open_=self.trade['Rate'].iloc[0]
+            close_=self.trade['Rate'].iloc[-1]
+            high_=self.trade['Rate'].max()
+            low_=self.trade['Rate'].min()
+            volume_=self.trade['Amount'].sum()
+            diff_=close_-open_
+            #if close_ >= open_:
+                #direction_=1
+            #else:
+                #direction_=-1
+            self.ohlcv_dict={
+                'Datetime':datetime_,
+                'Open':open_,
+                'High':high_,
+                'Low':low_,
+                'Close':close_,
+                'Volume':volume_,
+                'Diff':diff_
+            }
+        self.lock.acquire() #施錠
+        self.ohlcv=self.ohlcv.append(
+            self.ohlcv_dict,
+            ignore_index=True)
+        self.forget_trade()
+        self.lock.release() #解錠
+        print(self.ohlcv)
+
+    def calculate_bb(
+        self,
+        term=20,
+        coefficient=2
+    ):
+        datetime_ = self.start_time
+        close_list = self.ohlcv['Close'][-term:]
+        sma = close_list.mean()
+        std = close_list.std()
+        p_bb = sma+coefficient*std
+        m_bb = sma-coefficient*std
+        bb_dict = {
+            'Datetime':datetime_,
+            'SMA':sma,
+            'Std':std,
+            'pBB':p_bb,
+            'mBB':m_bb,
+        }
+        self.bb = self.bb.append(bb_dict, ignore_index=True)
+
+    def plot_graph(self):
+        print(1)
+        self.fig=plt.figure()
+        print(2)
+        self.ax=self.fig.add_subplot(1,1,1)
+        print(3)
+        self.ax.plot(
+            self.ohlcv['Datetime'],
+            self.ohlcv['Close'],
+            color="#808080")
+        print(4)
+        self.fig.canvas.draw()
+        print(5)
+        self.fig.savefig(str(cd)+'/figure/latest.png')
+        print(6)
+
+
+class HttpClient(WebsocketClient):
+    def __init__(
+        self,
+        websocket_client,
+    ):
+        super().__init__(websocket_client)
         self.URL='https://coincheck.com'
-        self.pair:str=pair
-        self.price:float=price
-        self.amount:float=amount
 
     def authenticate(
         self,
@@ -368,195 +554,3 @@ class HttpClient:
     def delete_order(self, _id=None):
         path = Path.balancepath.order + str(_id)
         return self.delete(path)
-
-
-
-class WebsocketClient:
-    def __init__(
-        self,
-        pair='btc_jpy',
-        time_scale_list=[1,5,15,30]
-        
-    ):
-        self.URL='wss://ws-api.coincheck.com/'
-        self.pair=pair
-        self.storage_term=60 #保存期間
-
-        self.request_json = json.dumps({
-            'type':'subscribe', 
-            'channel':pair+'-trades'
-        })
-        self.lock=threading.Lock()
-        self.figure,self.axes=plt.subplots(
-            3, 1, figsize=(7.0, 8.0))
-        self.trade=pd.DataFrame(columns=oCol.post)
-        self.ohlcv=pd.DataFrame(columns=cCol.ohlcv)
-        self.bb=pd.DataFrame(columns=cCol.bb)
-        self.rsi=pd.DataFrame(columns=cCol.rsi)
-
-    def connect(self):  #スレッド①
-        self.session=websocket.WebSocketApp(
-            self.URL,
-            on_open=self.__on_open,
-            on_close=self.__on_close,
-            on_error=self.__on_error,
-            on_message=self.__on_message,
-        )
-        print('session connect.')
-        self.session.run_forever()
-
-    #接続
-    def __on_open(self, ws):
-        self.__opened=True
-        self.session.send(
-            self.request_json)
-        print('opened.')
-
-    #接続エラー
-    def __on_error(self, ws, error):
-        print('incorrect.')
-        self.__reconnect()
-
-    #再接続
-    def __reconnect(self):
-        self.__exit()
-        time.sleep(1)
-        self.connect()
-
-    #離脱時
-    def __exit(self):
-        self.session.close()
-
-    #切断時
-    def __on_close(self, ws):
-        print('session closed.')
-    
-    #メッセージ受信時
-    def __on_message(self, ws, message):
-        trade_dict=self.form_trade(message)
-        self.trade=self.trade.append(
-            trade_dict,
-            ignore_index=True
-        )
-        print(self.trade.values[-1])
-        
-    def form_trade(
-        self,
-        message
-    ):
-        datetime_=datetime.datetime.now()
-        element=message.strip('[ ]').replace('"', '').split(',')
-        trade_dict={
-            'Datetime':datetime_,
-            'ID':int(element[0]),
-            'Rate':float(element[2]),
-            'Amount':float(element[3]),
-            'Type':element[4],
-        }
-        time.sleep(1/5)
-        return trade_dict
-
-    def collect(self):  #スレッド②
-        while True:
-            now=datetime.datetime.now()
-            self.start_time=datetime.datetime(
-                now.year, now.month, now.day,
-                now.hour, now.minute, 0
-            )
-            self.end_time=datetime.datetime(
-                now.year, now.month, now.day,
-                now.hour, now.minute, 0
-            )+datetime.timedelta(minutes=1)
-            print(self.start_time)
-            while datetime.datetime.now() < self.end_time:
-                time.sleep(1)
-                print('.', end='')
-            self.calculate_ohlcv()
-            self.lock.acquire() #施錠
-            self.plot_graph()
-            self.lock.release() #解錠
-            #if len(self.ohlcv) >= 15:
-            #    self.calculate_bb()
-            #    print(self.bb)
-
-    def forget_trade(self):
-        self.trade=pd.DataFrame(columns=COLUMN.trade)
-        
-    def calculate_ohlcv(self):
-        datetime_=self.start_time
-        if len(self.trade) == 0:
-            print('incorrect at calculate_ohlcv')
-            self.ohlcv_dict={
-                'Datetime':datetime_,
-                'Open':None,
-                'High':None,
-                'Low':None,
-                'Close':None,
-                'Volume':None,
-                'Diff':None
-            }
-        else:
-            open_=self.trade['Rate'].iloc[0]
-            close_=self.trade['Rate'].iloc[-1]
-            high_=self.trade['Rate'].max()
-            low_=self.trade['Rate'].min()
-            volume_=self.trade['Amount'].sum()
-            diff_=close_-open_
-            #if close_ >= open_:
-                #direction_=1
-            #else:
-                #direction_=-1
-            self.ohlcv_dict={
-                'Datetime':datetime_,
-                'Open':open_,
-                'High':high_,
-                'Low':low_,
-                'Close':close_,
-                'Volume':volume_,
-                'Diff':diff_
-            }
-        self.lock.acquire() #施錠
-        self.ohlcv=self.ohlcv.append(
-            self.ohlcv_dict,
-            ignore_index=True)
-        self.forget_trade()
-        self.lock.release() #解錠
-        print(self.ohlcv)
-
-    def calculate_bb(
-        self,
-        term=20,
-        coefficient=2
-    ):
-        datetime_ = self.start_time
-        close_list = self.ohlcv['Close'][-term:]
-        sma = close_list.mean()
-        std = close_list.std()
-        p_bb = sma+coefficient*std
-        m_bb = sma-coefficient*std
-        bb_dict = {
-            'Datetime':datetime_,
-            'SMA':sma,
-            'Std':std,
-            'pBB':p_bb,
-            'mBB':m_bb,
-        }
-        self.bb = self.bb.append(bb_dict, ignore_index=True)
-
-    def plot_graph(self):
-        print(1)
-        self.fig=plt.figure()
-        print(2)
-        self.ax=self.fig.add_subplot(1,1,1)
-        print(3)
-        self.ax.plot(
-            self.ohlcv['Datetime'],
-            self.ohlcv['Close'],
-            color="#808080")
-        print(4)
-        self.fig.canvas.draw()
-        print(5)
-        self.fig.savefig(str(cd)+'/figure/latest.png')
-        print(6)
-
-
