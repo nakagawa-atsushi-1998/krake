@@ -5,8 +5,8 @@ load_dotenv()
 
 class PATH:
     PD=str(os.path.dirname(__file__))
-    GRAPH=PD+'stream/Graph/'
     LOG=PD+'stream/log/'
+    GRAPH=PD+'stream/graph/'
 
 class KEY:
     COINCHECK_API_ACCESS=os.getenv('COINCHECK_API_ACCESS')

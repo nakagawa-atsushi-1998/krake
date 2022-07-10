@@ -9,14 +9,18 @@ import threading
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import matplotlib; matplotlib.use('Agg')
-#matplotlib.use('tkagg')
+import matplotlib; matplotlib.use('Agg') #matplotlib.use('tkagg')
 import warnings; warnings.simplefilter('ignore')
-import os; cd=os.path.dirname(__file__)
-from model import crypto
+import os; cd=os.path.dirname(__file__); os.chdir(cd)
+from model import (
+    account,
+    crypto,
+    order
+)
 
-crypto_ = crypto.Crypto()
-COLUMN = crypto_.Column()
+account=account.Account(); aCol=account.Column()
+crypto=crypto.Crypto(); cCol=crypto.Column()
+order=order.Order(); oCol=order.Column()
 
 class Path:
     rate='/api/exchange/orders/rate'
