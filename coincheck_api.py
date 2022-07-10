@@ -3,24 +3,25 @@ import time
 import json
 import hmac
 import hashlib
-from tkinter import W
 import requests
 import websocket
 import threading
 import numpy as np
 import pandas as pd
+import matplotlib
+#matplotlib.use('tkagg')
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-
 import crypto
-import warnings
-warnings.simplefilter('ignore')
+import warnings; warnings.simplefilter('ignore')
+import os; cd=os.path.abspath(".")
 
 crypto_ = crypto.Crypto()
 COLUMN = crypto_.Column()
 
 class Path:
     rate='/api/exchange/orders/rate'
-    trade='/api/trade'
+    trades='/api/trades'
     order='/api/exchange/orders'
     balance='/api/accounts/balance'
     transaction='/api/exchange/orders/transactions'
@@ -108,34 +109,34 @@ class HttpClient:
         ).json()
 
     def get_unsettled_order(self):
-        path = Path.unsettled_order
+        path=Path.unsettled_order
         return self.get(path)
 
     def get_cancel_status(self, _id=None):
-        path = Path.cancel_status+'?id=' + str(_id)
+        path=Path.cancel_status+'?id='+str(_id)
         return self.get(path)
 
     def get_transaction(self):
-        path = Path.transaction
+        path=Path.transaction
         return self.get(path)
 
     def get_balance(self):
-        path = Path.balance
+        path=Path.balance
         return self.get(path)
-    
+
     def get_rate(self):
-        path = '/api/rate/' + self.pair
+        path='/api/rate/'+self.pair
         return requests.get(
             self.host+path
         ).json()
-    
+
     def get_amount(
         self,
         order_type:str,
         price=None
     ):
-        path = Path.rate
-        params = {
+        path=Path.rate
+        params={
             'order_type':order_type,
             'pair':self.pair,
             'price':price
@@ -144,14 +145,14 @@ class HttpClient:
             self.URL+path,
             params=params
         ).json()
-    
+
     def get_price(
         self,
         order_type:str,
         amount=None,
     ):
-        path = Path.rate
-        params = {
+        path=Path.rate
+        params={
             'order_type':order_type,
             'pair':self.pair,
             'amount':amount
@@ -160,6 +161,63 @@ class HttpClient:
             self.URL+path,
             params=params
         ).json()
+    
+    def get_trades(
+        self,
+        limit=None,
+        order='desc',
+        starting_after=None,
+        ending_before=None
+    ):
+        path=Path.trades
+        params={
+            'limit':limit,
+            'starting_before':starting_after,
+            'ending_after':ending_before,
+            'order':order,
+            'pair':self.pair
+        }
+        return requests.get(
+            self.URL+path,
+            params=params
+        ).json()['data']
+    
+    def form_trades(
+        self,
+        trades,
+    ):
+        trade_df=pd.DataFrame(columns=COLUMN.trade)
+        for trade in reversed(trades):
+            trade_dict={
+                'ID':int(trade['id']), #int
+                'Datetime':datetime.datetime.strptime(trade['created_at'], '%Y-%m-%dT%H:%M:%S.%fZ')+datetime.timedelta(hours=9),
+                'Rate':trade['rate'],
+                'Amount':trade['amount'],
+                'Type':trade['order_type']
+            }
+            trade_df=trade_df.append(
+                trade_dict,
+                ignore_index=True)
+        start_id=trade_df['ID'].iloc[0]
+        end_id=trade_df['ID'].iloc[-1]
+        return trade_df, start_id, end_id
+
+    def split_trades_into_ohlcv(
+        self,
+        trades
+    ):
+        while True:
+            if len(trades) == 0:
+                break
+            dt=trades['Datetime'].iloc[0]
+            start_time=datetime.datetime(
+                year=dt.year, month=dt.month, day=dt.day,
+                hour=dt.hour, minute=dt.minute, second=0)
+            end_time=start_time+datetime.timedelta(minutes=1)
+            today_trades=trades.query('@start_time <= Datetime < @end_time')
+            trades=trades.query('@end_time <= Datetime')
+            print(today_trades)
+            trades.reset_index()
 
     def post_order_buy(
         self,
@@ -178,7 +236,7 @@ class HttpClient:
         return self.post(
             path,
             params)
-    
+
     def post_order_sell(
         self,
         rate,
@@ -300,7 +358,7 @@ class WebsocketClient:
         )
         print('session connect.')
         self.session.run_forever()
-        
+
     #接続
     def __on_open(self, ws):
         self.__opened=True
@@ -344,8 +402,9 @@ class WebsocketClient:
         element=message.strip('[ ]').replace('"', '').split(',')
         trade_dict={
             'Datetime':datetime_,
-            'Price':float(element[2]),
-            'Volume':float(element[3]),
+            'ID':int(element[0]),
+            'Rate':float(element[2]),
+            'Amount':float(element[3]),
             'Type':element[4],
         }
         time.sleep(1/5)
@@ -406,15 +465,15 @@ class WebsocketClient:
                 'Volume':volume_,
                 'Diff':diff_
             }
-        self.lock.acquire()
+        self.lock.acquire() #施錠
         self.ohlcv=self.ohlcv.append(
             self.ohlcv_dict,
             ignore_index=True)
         self.forget_trade()
         print(self.ohlcv)
-        self.lock.release()
-        #self.plot_graph()
-    
+        self.plot_graph()
+        self.lock.release() #解錠
+
     def calculate_bb(
         self,
         term=20,
@@ -436,16 +495,23 @@ class WebsocketClient:
         self.bb = self.bb.append(bb_dict, ignore_index=True)
 
     def plot_graph(self):
-        #plt.clear()
-        #self.axes[0].cla()
-        plt.plot(
+        print(1)
+        self.fig=plt.figure()
+        print(2)
+        self.ax=self.fig.add_subplot(1,1,1)
+        print(3)
+        self.ax.plot(
             self.ohlcv['Datetime'],
             self.ohlcv['Close'],
             color="#808080")
-        #plt.show()
+        print(4)
+        self.fig.canvas.draw()
+        print(5)
+        self.fig.savefig(cd+'/figure.png')
+        print(6)
         #self.figure.canvas.draw()
         #self.figure.canvas.flush_events()
-    
+
     def trade(self):    #スレッド③
         buy_execute=sell_execute=False
         possition='none'
@@ -480,6 +546,5 @@ class WebsocketClient:
                     possition='none'
             print(possition)
             time.sleep(5)
-            
-ws=WebsocketClient()
 
+ws=WebsocketClient()

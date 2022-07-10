@@ -7,8 +7,9 @@ class Crypto:
     class Column:
         trade = [
             'Datetime',
-            'Price',
-            'Volume',
+            'ID',
+            'Rate',
+            'Amount',
             'Type'
         ]
         ohlcv = [
