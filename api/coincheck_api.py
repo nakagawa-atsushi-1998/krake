@@ -1,10 +1,5 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[ ]:
-
-
 import datetime
+from math import floor
 import time
 import json
 import hmac
@@ -34,6 +29,7 @@ class Path:
     trades='/api/trades'
     order='/api/exchange/orders'
     balance='/api/accounts/balance'
+    #transaction='/api/exchange/orders/transactions'
     transaction='/api/exchange/orders/transactions'
     cancel_status='/api/exchange/orders/cancel_status'
     unsettled_order='/api/exchange/orders/opens'
@@ -43,7 +39,7 @@ class WebsocketClient:
         self.pair='btc_jpy'
         #time_scale_list=[1,5,15,30]
         self.WURL='wss://ws-api.coincheck.com/'
-        self.storage_term=60 #保存期間
+        self.storage_term=[10, 60, 300, 900] #保存期間
         self.request_json = json.dumps({
             'type':'subscribe', 
             'channel':'btc_jpy-trades'
@@ -98,22 +94,19 @@ class WebsocketClient:
             now=datetime.datetime.now()
             self.start_time=datetime.datetime(
                 now.year, now.month, now.day,
-                now.hour, now.minute, 0
+                now.hour, now.minute, floor(now.second/10)*10
             )
             self.end_time=datetime.datetime(
                 now.year, now.month, now.day,
-                now.hour, now.minute, 0
-            )+datetime.timedelta(minutes=1)
+                now.hour, now.minute, floor(now.second/10)*10
+            )+datetime.timedelta(seconds=10)
             while datetime.datetime.now() < self.end_time:
-                time.sleep(1)
+                time.sleep(0.5)
             self.lock.acquire() #施錠
-            self.crypto.cast_ohlcv(self.start_time)
-            print(self.crypto.ohlcv[-1:])
+            self.crypto.cast_ohlcv(self.start_time, self.end_time)
+            print(self.crypto.ohlcv)
+            self.crypto.forget_trade()
             self.lock.release() #施錠
-            #self.plot_graph()
-            #if len(self.ohlcv) >= 15:
-            #    self.calculate_bb()
-            #    print(self.bb)
 
 class HttpClient(WebsocketClient):
     def __init__(self, websocket_client):
@@ -223,21 +216,21 @@ class HttpClient(WebsocketClient):
         return requests.get(
             self.URL+path
         ).json()
-    
+
     def get_trade_list(
         self,
-        limit=None,
+        limit=100,
         order='desc',
         starting_after=None,
         ending_before=None
     ):
         path=Path.trades
         params={
+            'pair':self.pair,
             'limit':limit,
-            'starting_before':starting_after,
-            'ending_after':ending_before,
-            'order':order,
-            'pair':self.pair
+            'starting_after':starting_after,
+            'ending_before':ending_before,
+            'order':order
         }
         return requests.get(
             self.URL+path,
@@ -250,16 +243,17 @@ class HttpClient(WebsocketClient):
                 break
             dt=trades['Datetime'].iloc[0]
             start_time=datetime.datetime(
-                year=dt.year, month=dt.month, day=dt.day,
-                hour=dt.hour, minute=dt.minute, second=0)
-            end_time=start_time+datetime.timedelta(minutes=1)
+                dt.year, dt.month, dt.day,
+                dt.hour, dt.minute, floor(dt.second/10)*10)
+            end_time=start_time+datetime.timedelta(seconds=10)
             self.crypto.trade=trades.query('@start_time <= Datetime < @end_time')
             trades=trades.query('@end_time <= Datetime')
             print(start_time)
             print(self.crypto.trade)
             if len(trades) != 0:
-                self.crypto.cast_ohlcv(start_time)
                 trades.reset_index()
+                self.crypto.cast_ohlcv(start_time, end_time)
+                self.crypto.forget_trade()
             else:
                 pass
 

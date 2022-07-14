@@ -56,8 +56,7 @@ class Brain:
         self.cchc.account.balance=self.cchc.account.balance.reset_index(drop=True)
         print(self.cchc.account.balance)
         trade_list=self.cchc.get_trade_list(
-            limit=100,
-        )
+            limit=100,)
         trade_df, start_id, end_id = self.cchc.crypto.form_trade_list(trade_list)
         self.cchc.split_trades_into_ohlcv(trade_df)
         print(self.cchc.crypto.ohlcv.tail(20))
@@ -121,7 +120,10 @@ class Brain:
         print('送信結果:')
         print(str(send_result))
 
-
+    def draw(self):
+        while True:
+            time.sleep(5)
+            self.plot_graph()
 
     def plot_graph(self):
         path='graph.png'
@@ -143,6 +145,7 @@ class Brain:
         with ThreadPoolExecutor(max_workers=3) as executor:
             executor.submit(self.cchc.connect)
             executor.submit(self.cchc.cast)
+            executor.submit(self.draw)
             #executor.submit(self.gui.main)
             #executor.submit(self.logger.logger)
 
@@ -153,6 +156,14 @@ def main():
         KEY.COINCHECK_API_SECRET,
         KEY.LINE_API_TOKEN,
     )
+    trade_dict_list=brain.cchc.get_trade_list(
+        limit=100,
+        order='desc',
+        starting_after=None,
+        ending_before=None
+    )
+    for trade_dict in trade_dict_list:
+        print(trade_dict)
     brain.initialize_table()
     brain.plot_graph()
     brain.dominate()

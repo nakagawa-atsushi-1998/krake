@@ -1,9 +1,3 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[ ]:
-
-
 from xml.sax.handler import property_dom_node
 from xmlrpc.client import _datetime_type
 import json
@@ -14,6 +8,11 @@ import numpy as np
 import pandas as pd
 
 class Crypto:
+    """
+    メソッド:
+        form_xx():  受け取った生データをdict型データへ変換する
+        cast_xx():  DataFrame型データから他のDataFrame型データを計算する
+    """
     class Column:
         trade = [
             'Datetime',
@@ -90,7 +89,7 @@ class Crypto:
 
     def __init__(
         self,
-        time_scale=1,
+        time_scale=60,
     ):
         self.time_scale = time_scale #時間足　(秒)
         self.trade = pd.DataFrame(columns=self.Column.trade)
@@ -106,10 +105,10 @@ class Crypto:
 
     def forget_trade(self):
         self.lock.acquire()
-        self.crypto.trade=pd.DataFrame(columns=self.Column.trade)
+        self.trade=pd.DataFrame(columns=self.Column.trade)
         self.lock.release()
 
-    def form_trade(self, message):
+    def form_trade(self, message): #websocketで受け取ったmessageを変換
         datetime_=datetime.datetime.now()
         element=message.strip('[ ]').replace('"', '').split(',')
         trade_dict={
@@ -140,7 +139,8 @@ class Crypto:
 
     def cast_ohlcv(
         self,
-        start_time
+        start_time,
+        end_time
     ):
         datetime_=start_time
         if len(self.trade) == 0:
@@ -164,7 +164,6 @@ class Crypto:
             self.ohlcv=self.ohlcv.append(
                 self.ohlcv_dict,
                 ignore_index=True)
-            return 0
             
 
     def cast_bb(
@@ -186,8 +185,6 @@ class Crypto:
             'mBB':m_bb,
         }
         return bb_dict
-
-
 
 '''
     def add_ohlcv(
