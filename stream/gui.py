@@ -24,9 +24,10 @@ class GUI(tk.Frame):
 
     def main(self):
         self.frame.mainloop()
-
+'''
 def main():
     root=tk.Tk()
     gui = GUI(root)
     gui.main()
 main()
+'''

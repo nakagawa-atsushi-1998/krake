@@ -1,3 +1,4 @@
+import datetime
 import numpy as np
 import pandas as pd
 
@@ -10,7 +11,7 @@ class Order:
             'Rate',
             'Amount',
         ] #新規注文
-        post=[
+        past=[
             'Datetime',
             'ID',
             'Type',
@@ -33,7 +34,7 @@ class Order:
         self,
     ):
         self.new = pd.DataFrame(columns=self.Column.new)
-        self.post = pd.DataFrame(columns=self.Column.post)
+        self.past = pd.DataFrame(columns=self.Column.past)
         self.cancel = pd.DataFrame(columns=self.Column.cancel)
         self.unsettled = pd.DataFrame(columns=self.Column.unsettled)
 

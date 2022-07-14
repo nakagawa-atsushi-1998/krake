@@ -1,8 +1,15 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+# In[ ]:
+
+
 import datetime
 import time
 import json
 import hmac
 import hashlib
+from wsgiref.handlers import format_date_time
 import requests
 import websocket
 import threading
@@ -18,9 +25,9 @@ from .model import (
     order
 )
 
-aCol=account.Column()
-cCol=crypto.Column()
-oCol=order.Column()
+aCol=account.Account.Column()
+cCol=crypto.Crypto.Column()
+oCol=order.Order.Column()
 
 class Path:
     rate='/api/exchange/orders/rate'
@@ -32,17 +39,14 @@ class Path:
     unsettled_order='/api/exchange/orders/opens'
 
 class WebsocketClient:
-    def __init__(
-        self,
-        pair='btc_jpy',
-        time_scale_list=[1,5,15,30]
-    ):
+    def __init__(self):
+        self.pair='btc_jpy'
+        #time_scale_list=[1,5,15,30]
         self.WURL='wss://ws-api.coincheck.com/'
-        self.pair=pair
         self.storage_term=60 #保存期間
         self.request_json = json.dumps({
             'type':'subscribe', 
-            'channel':pair+'-trades'
+            'channel':'btc_jpy-trades'
         })
         self.lock=threading.Lock()
         self.order=order.Order()
@@ -82,27 +86,14 @@ class WebsocketClient:
         print('session closed.')
     #メッセージ受信時
     def __on_message(self, ws, message):
-        trade_dict=self.form_trade(message)
+        trade_dict=self.crypto.form_trade(message)
         self.crypto.trade=self.crypto.trade.append(
             trade_dict,
-            ignore_index=True
-        )
-        print(self.crypto.trade.values[-1])
-    
-    def form_trade(self, message):
-        datetime_=datetime.datetime.now()
-        element=message.strip('[ ]').replace('"', '').split(',')
-        trade_dict={
-            'Datetime':datetime_,
-            'ID':int(element[0]),
-            'Rate':float(element[2]),
-            'Amount':float(element[3]),
-            'Type':element[4],
-        }
-        time.sleep(1/5)
-        return trade_dict
+            ignore_index=True)
+        time.sleep(0.25)
+        print(*self.crypto.trade.values[-1])
 
-    def collect(self):  #スレッド②
+    def cast(self):  #スレッド②
         while True:
             now=datetime.datetime.now()
             self.start_time=datetime.datetime(
@@ -113,115 +104,29 @@ class WebsocketClient:
                 now.year, now.month, now.day,
                 now.hour, now.minute, 0
             )+datetime.timedelta(minutes=1)
-            print(self.start_time)
             while datetime.datetime.now() < self.end_time:
                 time.sleep(1)
-            self.calculate_ohlcv()
             self.lock.acquire() #施錠
-            self.plot_graph()
-            self.lock.release() #解錠
+            self.crypto.cast_ohlcv(self.start_time)
+            print(self.crypto.ohlcv[-1:])
+            self.lock.release() #施錠
+            #self.plot_graph()
             #if len(self.ohlcv) >= 15:
             #    self.calculate_bb()
             #    print(self.bb)
 
-    def forget_trade(self):
-        self.crypto.trade=pd.DataFrame(columns=cCol['trade'])
-        
-    def calculate_ohlcv(self):
-        datetime_=self.start_time
-        if len(self.crypto.trade) == 0:
-            print('incorrect at calculate_ohlcv')
-            self.ohlcv_dict={
-                'Datetime':datetime_,
-                'Open':None,
-                'High':None,
-                'Low':None,
-                'Close':None,
-                'Volume':None,
-                'Diff':None
-            }
-        else:
-            open_=self.crypto.trade['Rate'].iloc[0]
-            close_=self.crypto.trade['Rate'].iloc[-1]
-            high_=self.crypto.trade['Rate'].max()
-            low_=self.crypto.trade['Rate'].min()
-            volume_=self.crypto.trade['Amount'].sum()
-            diff_=close_-open_
-            self.ohlcv_dict={
-                'Datetime':datetime_,
-                'Open':open_,
-                'High':high_,
-                'Low':low_,
-                'Close':close_,
-                'Volume':volume_,
-                'Diff':diff_
-            }
-        self.lock.acquire() #施錠
-        self.crypto.ohlcv=self.crypto.ohlcv.append(
-            self.ohlcv_dict,
-            ignore_index=True)
-        self.forget_trade()
-        self.lock.release() #解錠
-        print(self.crypto.ohlcv)
-
-    def calculate_bb(
-        self,
-        term=20,
-        coefficient=2
-    ):
-        datetime_=self.start_time
-        close_list=self.crypto.ohlcv['Close'][-term:]
-        sma=close_list.mean()
-        std=close_list.std()
-        p_bb= sma+coefficient*std
-        m_bb=sma-coefficient*std
-        bb_dict={
-            'Datetime':datetime_,
-            'SMA':sma,
-            'Std':std,
-            'pBB':p_bb,
-            'mBB':m_bb,
-        }
-        self.crypto.bb=self.crypto.bb.append(bb_dict, ignore_index=True)
-
-    def plot_graph(self):
-        print(1)
-        self.fig=plt.figure()
-        print(2)
-        self.ax=self.fig.add_subplot(1,1,1)
-        print(3)
-        self.ax.plot(
-            self.ohlcv['Datetime'],
-            self.ohlcv['Close'],
-            color="#808080")
-        print(4)
-        self.fig.canvas.draw()
-        print(5)
-        self.fig.savefig(str(cd)+'/graph/ohlcv.png')
-        print(6)
-
-
-
 class HttpClient(WebsocketClient):
-    def __init__(
-        self,
-        websocket_client,
-    ):
-        super().__init__(websocket_client)
+    def __init__(self, websocket_client):
+        #super().__init__(websocket_client)
+        super().__init__()
         self.URL='https://coincheck.com'
 
-    def authenticate(
-        self,
-        access_key,
-        secret_key
-    ):
+    def authenticate(self, access_key, secret_key):
         self.__access_key=access_key
         self.__secret_key=secret_key
+        print('authenticated API.')
 
-    def gain_signature(
-        self,
-        message
-    ):
+    def gain_signature(self, message):
         signature=hmac.new(
             bytes(self.__secret_key.encode('ascii')),
             bytes(message.encode('ascii')),
@@ -229,11 +134,7 @@ class HttpClient(WebsocketClient):
         ).hexdigest()
         return signature
 
-    def gain_header(
-        self,
-        nonce,
-        signature
-    ):
+    def gain_header(self, nonce, signature):
         header = {
             'ACCESS-KEY':self.__access_key,
             'ACCESS-NONCE':nonce,
@@ -288,51 +189,42 @@ class HttpClient(WebsocketClient):
 
     def get_transaction(self):
         path=Path.transaction
-        return self.get(path)
+        return self.get(path)['transactions']
+    
+    def form_transaction(self, tran_list):
+        self.tran_df=pd.DataFrame(columns=oCol.past)
+        for tran in tran_list:
+            tran_dict={
+                'Datetime':datetime.datetime.strptime(tran['created_at'], '%Y-%m-%dT%H:%M:%S.%fZ')+datetime.timedelta(hours=9),
+                'ID':tran['order_id'],
+                'Type':tran['side'],
+                'Rate':float(tran['funds']['jpy']),
+                'Amount':float(tran['funds']['btc'])
+            }
+            self.tran_df=self.tran_df.append(tran_dict, ignore_index=True)
+        return self.tran_df
 
     def get_balance(self):
         path=Path.balance
         return self.get(path)
 
+    def get_balance_until_true(self):
+        path=Path.balance
+        while True:
+            result=self.get(path)
+            if result['success']==True:
+                break
+            print('get balance until true.')
+            time.sleep(1)
+        return result
+
     def get_rate(self):
         path='/api/rate/'+self.pair
         return requests.get(
-            self.host+path
-        ).json()
-
-    def get_amount(
-        self,
-        order_type:str,
-        price=None
-    ):
-        path=Path.rate
-        params={
-            'order_type':order_type,
-            'pair':self.pair,
-            'price':price
-        }
-        return requests.get(
-            self.URL+path,
-            params=params
-        ).json()
-
-    def get_price(
-        self,
-        order_type:str,
-        amount=None,
-    ):
-        path=Path.rate
-        params={
-            'order_type':order_type,
-            'pair':self.pair,
-            'amount':amount
-        }
-        return requests.get(
-            self.URL+path,
-            params=params
+            self.URL+path
         ).json()
     
-    def get_trades(
+    def get_trade_list(
         self,
         limit=None,
         order='desc',
@@ -351,31 +243,8 @@ class HttpClient(WebsocketClient):
             self.URL+path,
             params=params
         ).json()['data']
-    
-    def form_trades(
-        self,
-        trades,
-    ):
-        trade_df=pd.DataFrame(columns=oCol.post)
-        for trade in reversed(trades):
-            trade_dict={
-                'ID':int(trade['id']), #int
-                'Datetime':datetime.datetime.strptime(trade['created_at'], '%Y-%m-%dT%H:%M:%S.%fZ')+datetime.timedelta(hours=9),
-                'Rate':trade['rate'],
-                'Amount':trade['amount'],
-                'Type':trade['order_type']
-            }
-            trade_df=trade_df.append(
-                trade_dict,
-                ignore_index=True)
-        start_id=trade_df['ID'].iloc[0]
-        end_id=trade_df['ID'].iloc[-1]
-        return trade_df, start_id, end_id
 
-    def split_trades_into_ohlcv(
-        self,
-        trades
-    ):
+    def split_trades_into_ohlcv(self, trades):
         while True:
             if len(trades) == 0:
                 break
@@ -384,10 +253,15 @@ class HttpClient(WebsocketClient):
                 year=dt.year, month=dt.month, day=dt.day,
                 hour=dt.hour, minute=dt.minute, second=0)
             end_time=start_time+datetime.timedelta(minutes=1)
-            today_trades=trades.query('@start_time <= Datetime < @end_time')
+            self.crypto.trade=trades.query('@start_time <= Datetime < @end_time')
             trades=trades.query('@end_time <= Datetime')
-            print(today_trades)
-            trades.reset_index()
+            print(start_time)
+            print(self.crypto.trade)
+            if len(trades) != 0:
+                self.crypto.cast_ohlcv(start_time)
+                trades.reset_index()
+            else:
+                pass
 
     def post_order_buy(
         self,
@@ -443,7 +317,7 @@ class HttpClient(WebsocketClient):
     def post_market_sell(
         self,
         amount, #量
-        order_type='sell',
+        order_type='market_sell',
         #stop_loss_rate=None
     ):
         path=Path.order
@@ -456,6 +330,7 @@ class HttpClient(WebsocketClient):
             path,
             params)
 
+    """
     def post_order(
         self,
         order_type=None,
@@ -488,7 +363,9 @@ class HttpClient(WebsocketClient):
             path,
             params
         )
+        """
 
     def delete_order(self, _id=None):
         path = Path.balancepath.order + str(_id)
         return self.delete(path)
+

@@ -1,7 +1,6 @@
 import json
 import time
 import datetime
-#import tkinter
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -10,24 +9,18 @@ from concurrent.futures import (
     ThreadPoolExecutor,
     ProcessPoolExecutor
 )
-from stream import (
-    logger,
-    #gui
-)
 from api import (
     coincheck_api,
     line_notify_api
 )
 
-class Brain:
+class Orderer:
     def __init__(
         self,
     ):
         self.cchc=coincheck_api.HttpClient(
             coincheck_api.WebsocketClient())
         self.figure, self.axes=plt.subplots(3, 1, figsize=(7.0, 8.0))
-        #self.gui=gui.GUI(tkinter.Tk())
-        #self.logger=logger.Logger()
 
     def give_key_to_api(
         self,
@@ -41,28 +34,6 @@ class Brain:
         self.lc=line_notify_api.HttpClient()
         self.lc.authenticate(
             LINE_API_TOKEN)
-
-    def initialize_table(
-        self,
-    ):
-        tran_list=self.cchc.get_transaction()
-        tran_df=self.cchc.form_transaction(tran_list)
-        balance_=self.cchc.get_balance_until_true()
-        balance_dict=self.cchc.account.form_balance(balance_)
-        self.cchc.account.balance=self.cchc.account.balance.append(
-            balance_dict, ignore_index=True)
-        self.cchc.account.calc_balance(tran_df)
-        #self.cchc.account.balance=self.cchc.account.balance.query('JPY > 25000')
-        self.cchc.account.balance=self.cchc.account.balance.reset_index(drop=True)
-        print(self.cchc.account.balance)
-        trade_list=self.cchc.get_trade_list(
-            limit=100,
-        )
-        trade_df, start_id, end_id = self.cchc.crypto.form_trade_list(trade_list)
-        self.cchc.split_trades_into_ohlcv(trade_df)
-        print(self.cchc.crypto.ohlcv.tail(20))
-
-
 
     def check_balance(
         self,
@@ -120,42 +91,20 @@ class Brain:
         send_result=self.lc.send_message(result)
         print('送信結果:')
         print(str(send_result))
-
-
-
-    def plot_graph(self):
-        path='graph.png'
-        self.axes[0].plot(
-            self.cchc.crypto.ohlcv['Datetime'],
-            self.cchc.crypto.ohlcv['Close'],
-            linewidth=1/2,
-            color="#808080")
-        self.axes[2].plot(
-            self.cchc.account.balance['Datetime'],
-            self.cchc.account.balance['JPY'],
-            color="#808080",
-            linewidth=1/2
-        )
-        self.figure.canvas.draw()
-        self.figure.savefig(path)
-
-    def dominate(self):
-        with ThreadPoolExecutor(max_workers=3) as executor:
-            executor.submit(self.cchc.connect)
-            executor.submit(self.cchc.cast)
-            #executor.submit(self.gui.main)
-            #executor.submit(self.logger.logger)
+        
 
 def main():
-    brain=Brain()
-    brain.give_key_to_api(
+    orderer=Orderer()
+    orderer.give_key_to_api(
         KEY.COINCHECK_API_ACCESS,
         KEY.COINCHECK_API_SECRET,
         KEY.LINE_API_TOKEN,
     )
-    brain.initialize_table()
-    brain.plot_graph()
-    brain.dominate()
+    orderer.check_balance(
+        ask_per_rate=0.008,
+        bid_per_amount=1.0
+    )
+    orderer.auto_order()
 
 if __name__ == "__main__":
     KEY=configure.KEY

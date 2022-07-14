@@ -16,7 +16,7 @@ class KEY:
     LINE_API_TOKEN=os.getenv('LINE_API_TOKEN')
 
 class FORM:
-    class COLOR:
+    class Color:
         ohlcv = ['#5F5', '#F55', '#55F', '#888']
         candle = ['#5F5', '#F55', '#55F', '#888']
         bb = ['#AAA', '#BBB', '#CCC', '#DDD']
