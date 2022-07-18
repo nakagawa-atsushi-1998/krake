@@ -30,13 +30,13 @@ class Crypto:
             'Volume',#出来高
             'Diff'
         ] #OHLCV
-        candle = [
-            'Datetime', #日時
-            'Direction',#方向性
-            'Body',     #実体
-            'pShadow',  #上ヒゲ
-            'mShadow',  #下ヒゲ
-        ] #ローソク足
+        #candle = [
+        #    'Datetime', #日時
+        #    'Direction',#方向性
+        #    'Body',     #実体
+        #    'pShadow',  #上ヒゲ
+        #    'mShadow',  #下ヒゲ
+        #] #ローソク足
         bb = [
             'Datetime', #日時
             'SMA',  #単純移動平均
@@ -94,7 +94,7 @@ class Crypto:
         self.time_scale = time_scale #時間足　(秒)
         self.trade = pd.DataFrame(columns=self.Column.trade)
         self.ohlcv = pd.DataFrame(columns=self.Column.ohlcv)
-        self.candle = pd.DataFrame(columns=self.Column.candle)
+        #self.candle = pd.DataFrame(columns=self.Column.candle)
         self.bb = pd.DataFrame(columns=self.Column.bb)
         self.ps = pd.DataFrame(columns=self.Column.ps)
         self.dmi = pd.DataFrame(columns=self.Column.dmi)
@@ -104,9 +104,7 @@ class Crypto:
         self.lock=threading.Lock()
 
     def forget_trade(self):
-        self.lock.acquire()
         self.trade=pd.DataFrame(columns=self.Column.trade)
-        self.lock.release()
 
     def form_trade(self, message): #websocketで受け取ったmessageを変換
         datetime_=datetime.datetime.now()
@@ -124,7 +122,10 @@ class Crypto:
         trade_df=pd.DataFrame(columns=self.Column.trade)
         for trade in reversed(trades):
             trade_dict={
-                'Datetime':datetime.datetime.strptime(trade['created_at'], '%Y-%m-%dT%H:%M:%S.%fZ')+datetime.timedelta(hours=9),
+                'Datetime':datetime.datetime.strptime(
+                    trade['created_at'],
+                    '%Y-%m-%dT%H:%M:%S.%fZ'
+                )+datetime.timedelta(hours=9),
                 'ID':int(trade['id']), #int
                 'Rate':float(trade['rate']),
                 'Amount':float(trade['amount']),
@@ -152,78 +153,158 @@ class Crypto:
             low_=self.trade['Rate'].min()
             volume_=self.trade['Amount'].sum()
             diff_=close_ - open_
-            self.ohlcv_dict={
+            ohlcv_dict={
                 'Datetime':datetime_,
-                'Open':open_,
-                'High':high_,
-                'Low':low_,
-                'Close':close_,
-                'Volume':volume_,
-                'Diff':diff_
+                'Open':round(open_,2),
+                'High':round(high_,2),
+                'Low':round(low_,2),
+                'Close':round(close_,2),
+                'Volume':round(volume_,2),
+                'Diff':round(diff_,2)
             }
+            print(ohlcv_dict)
             self.ohlcv=self.ohlcv.append(
-                self.ohlcv_dict,
+                ohlcv_dict,
                 ignore_index=True)
-            
 
     def cast_bb(
         self,
+        datetime_,
         term=20,
         coefficient=2
     ):
-        datetime_=self.start_time
-        close_list=self.crypto.ohlcv['Close'].tail(term)
-        sma=close_list.mean()
-        std=close_list.std()
-        p_bb= sma+coefficient*std
+        close_=self.ohlcv['Close'].tail(term)
+        sma=close_.mean()
+        std=close_.std()
+        p_bb=sma+coefficient*std
         m_bb=sma-coefficient*std
         bb_dict={
             'Datetime':datetime_,
-            'SMA':sma,
-            'Std':std,
-            'pBB':p_bb,
-            'mBB':m_bb,
+            'SMA':round(sma,2),
+            'Std':round(std,2),
+            'pBB':round(p_bb,2),
+            'mBB':round(m_bb,2),
         }
-        return bb_dict
+        print(bb_dict)
+        self.bb=self.bb.append(
+            bb_dict, ignore_index=True)
+
+    def cast_rsi(
+        self,
+        datetime_,
+        term=14,
+    ):
+        #ohlcv２行以下で破綻
+        p_diff_df=self.rsi['pDiff'].tail(term-1)
+        m_diff_df=self.rsi['mDiff'].tail(term-1)
+        diff_=self.ohlcv['Close'].iloc[-2]-self.ohlcv['Close'].iloc[-1]
+        if diff_ >= 0:
+            p_diff=diff_
+            m_diff=0
+        elif diff_ < 0:
+            p_diff=0
+            m_diff=diff_
+        p_diff_df=p_diff_df.assign(
+            pDiff=p_diff)
+        m_diff_df=m_diff_df.assign(
+            mDiff=m_diff)
+        p_ave=p_diff_df.mean()
+        m_ave=m_diff_df.abs().mean()
+        rsi=100*p_ave/(p_ave+m_ave)
+        rsi_dict={
+            'Datetime':datetime_,
+            'Diff':round(diff_,2),
+            'pDiff':round(p_diff,2),
+            'mDiff':round(m_diff,2),
+            'pAve':round(p_ave,2),
+            'mAve':round(m_ave,2),
+            'RSI':round(rsi,2)
+        }
+        self.rsi=self.rsi.append(
+            rsi_dict, ignore_index=True)
+
+    def cast_macd(
+        self,
+        datetime_,
+        short_term=12, # 6,12,19
+        long_term=26, # 19,26,39
+        signal_term=9, # 4,9,12
+    ):
+        close_df=self.ohlcv['Close']
+        short_ema=close_df.tail(short_term).mean()
+        long_ema=close_df.tail(long_term).mean()
+        macd=short_ema - long_ema
+        macd_df=self.macd['MACD'].tail(signal_term)
+        macd_df=macd_df.append(macd)
+        signal=macd_df.mean()
+        hist=macd - signal
+        #before_hist=self.macd['Hist'].iloc[-1]
+        #if hist > before_hist:
+        #    crossover=1
+        #elif hist < before_hist:
+        #    crossover=-1
+        #else:
+        #    crossover=0
+        macd_dict = {
+            'Datetime':datetime_,
+            'ShortEMA':round(short_ema,2),
+            'LongEMA':round(long_ema,2),
+            'MACD':round(macd,2),
+            'Signal':round(signal,2),
+            'Hist':round(hist,2),
+            #'Crossover':crossover,
+        }
+        print(macd_dict)
+        self.macd=self.macd.append(
+            macd_dict, ignore_index=True)
+
+    def init_bb(
+        self,
+        term=20,
+        coefficient=2
+    ):
+        self.bb['Datetime']=self.ohlcv['Datetime']
+        self.bb['SMA']=self.ohlcv['Close'].rolling(term).mean()
+        self.bb['Std']=self.ohlcv['Close'].rolling(term).std()
+        self.bb['pBB']=self.bb['SMA'] + coefficient*self.bb['Std']
+        self.bb['mBB']=self.bb['SMA'] - coefficient*self.bb['Std']
+
+    def init_rsi(
+        self,
+        term=14
+    ):
+        self.rsi['Datetime']=self.ohlcv['Datetime']
+        self.rsi['Diff']=self.ohlcv['Close'].diff()
+        up=self.rsi['Diff'].copy(); up[up < 0]=0
+        down=self.rsi['Diff'].copy(); down[down > 0]=0
+        self.rsi['pAve']=up.rolling(term).mean()
+        self.rsi['mAve']=down.abs().rolling(term).mean()
+        self.rsi['RSI']=100*self.rsi['pAve']/(self.rsi['pAve']+self.rsi['mAve'])
+
+    def init_macd(
+        self,
+        short_term=12,
+        long_term=26,
+        signal_term=9
+    ):
+        self.macd['Datetime']=self.ohlcv['Datetime']
+        self.macd['ShortEMA']=self.ohlcv['Close'].ewm(short_term).mean()
+        self.macd['LongEMA']=self.ohlcv['Close'].ewm(long_term).mean()
+        self.macd['MACD']=self.macd['ShortEMA'] - self.macd['LongEMA']
+        self.macd['Signal']=self.macd['MACD'].rolling(signal_term).mean()
+        self.macd['Hist']=self.macd['MACD'] - self.macd['Signal']
+
+    def trim(
+        self,
+        df,
+        term
+    ):
+        if term < len(df):
+            df=df.drop_duplicates()
+            df=df.tail(term)
+        return df
 
 '''
-    def add_ohlcv(
-        self,
-        ohlcv_dict,
-    ):
-        self.ohlcv = self.ohlcv.append(ohlcv_dict, ignore_index=True)
-
-    def initialize_bb(
-        self,
-        term=20,
-        coefficient=2
-    ):
-        self.bb['Datetime'] = self.ohlcv['Datetime']
-        self.bb['SMA'] = self.ohlcv['Close'].rolling(term).mean()
-        self.bb['Std'] = self.ohlcv['Close'].rolling(term).std()
-        self.bb['pBB'] = self.bb['SMA'] + coefficient*self.bb['Std']
-        self.bb['mBB'] = self.bb['SMA'] - coefficient*self.bb['Std']
-
-    def calculate_bb(
-        self,
-        term=20,
-        coefficient=2
-    ):
-        datetime_ = self.ohlcv['Datetime'].iloc[-1]
-        close_list = self.ohlcv['Close'][-term:]
-        sma = close_list.mean()
-        std = close_list.std()
-        p_bb = sma+coefficient*std
-        m_bb = sma-coefficient*std
-        bb_dict = {
-            'Datetime':datetime_,
-            'SMA':sma,
-            'Std':std,
-            'pBB':p_bb,
-            'mBB':m_bb,
-        }
-        self.bb = self.ohlcv.append(bb_dict, ignore_index=True)
-
     def initialize_ps(
         self,
         max_af=0.2,
@@ -316,69 +397,6 @@ class Crypto:
         }
         self.ps = self.ps.append(ps_dict, ignore_index=True)
 
-    def initialize_rsi(
-        self,
-        term=14
-    ):
-        self.rsi['Datetime'] = self.ohlcv['Datetime']
-        self.rsi['Diff'] = self.ohlcv['Close'].diff()
-        up = self.rsi['Diff'].copy(); up[up < 0] = 0
-        down = self.rsi['Diff'].copy(); down[down > 0] = 0
-        self.rsi['pAve'] = up.rolling(term).mean()
-        self.rsi['mAve'] = down.abs().rolling(term).mean()
-        self.rsi['RSI'] = 100*self.rsi['pAve']/(self.rsi['pAve']+self.rsi['mAve'])
-
-    def initialize_macd(
-        self,
-        short_term=12,
-        long_term=26,
-        signal_term=9
-    ):
-        self.macd['Datetime'] = self.ohlcv['Datetime']
-        self.macd['ShortMA'] = self.ohlcv['Close'].ewm(short_term).mean()
-        self.macd['LongMA'] = self.ohlcv['Close'].ewm(long_term).mean()
-        self.macd['MACD'] = self.macd['ShortMA'] - self.macd['LongMA']
-        self.macd['Signal'] = self.macd['MACD'].rolling(signal_term).mean()
-        self.macd['Hist'] = self.macd['MACD'] - self.macd['Signal']
-        diff = self.macd['Hist'].diff()
-        up = diff.copy(); up[up < 0] = 0
-        down = diff.copy(); down[down > 0] = 0
-        self.pave = up.rolling(15).mean()
-        self.mave = down.abs().rolling(15).mean()
-        self.macd['HistRSI'] = 100*self.pave/(self.pave+self.mave)
-
-    def calculate_candle(self):
-        datetime_ = self.ohlcv['Datetime'].iloc[-1]
-        open_ = self.ohlcv['Open'].iat[-1]
-        high_ = self.ohlcv['High'].iat[-1]
-        low_ = self.ohlcv['Low'].iat[-1]
-        close_ = self.ohlcv['Close'].iat[-1]
-        if open_ > close_:
-            direction = -1
-            body = open_ - close_
-            p_shadow = high_ - open_
-            m_shadow = close_ - low_
-        elif open_ < close_:
-            dirrection = 1
-            body = close_ - open_
-            p_shadow = high_ - close_
-            m_shadow = open_ - low_
-        else:
-            dirrection = 0
-            body = 0
-            p_shadow = high_ - open_
-            m_shadow = open_ - low_
-        candle_dict = {
-            'Datetime': datetime_,
-            'Dirrection': direction,
-            'Body': body,
-            'uShadow': p_shadow,
-            'mShadow': m_shadow,
-        }
-        self.candle = self.ohlcv.append(candle_dict, ignore_index=True)
-
-
-
     def calculate_dmi(
         self,
         term=14,
@@ -419,94 +437,23 @@ class Crypto:
         }
         self.dmi = self.ohlcv.append(dmi_dict, ignore_index=True)
 
-    def calculate_rsi(
-        self,
-        term=14,
-    ):
-        datetime_ = self.ohlcv['Datetime'].iloc[-1]
-        diff_ = self.ohlcv['Close'].iloc[-2] - self.ohlcv['Close'].iloc[-1]
-        if diff_ >= 0:
-            p_diff = diff_
-            m_diff = 0
-        elif diff_ < 0:
-            p_diff = 0
-            m_diff = diff_
-        p_diff_list = self.rsi['pDiff'][-(term-1):].to_list()
-        m_diff_list = self.rsi['mDiff'][-(term-1):].to_list()
-        p_diff_list = p_diff_list.append(
-            p_diff,
-            #index=['pDiff'],
-            #ignore_index=True
-        )
-        m_diff_list = m_diff_list.append(
-            m_diff,
-            #index=['mDiff'],
-            #ignore_index=True
-        )
-        p_ave = pd.DataFrame(p_diff_list).mean()
-        m_ave = pd.DataFrame(m_diff_list).abs().mean()
-        rsi = 100*p_ave/(p_ave+m_ave)
-        rsi_dict = {
-            'Datetime':datetime_,
-            'Diff':diff_,
-            'pDiff':p_diff,
-            'mDiff':m_diff,
-            'pAve':p_ave,
-            'mAve':m_ave,
-            'RSI':rsi,
-        }
-        self.rsi = self.rsi.append(rsi_dict, ignore_index=True)
-
     def calculate_rci(
         self,
         term=14,
     ):
         pass
+'''
 
-    def calculate_macd(
-        self,
-        short_term=12, # 6,12,19
-        long_term=26, # 19,26,39
-        signal_term=9, # 4,9,12
-    ):
-        datetime_ = self.ohlcv['Datetime'].iloc[-1]
-        close_list = self.ohlcv['Close']
-        short_ema = close_list.ewm(short_term).mean().iloc[-1]
-        long_ema = close_list.ewm(long_term).mean().iloc[-1]
-        macd = short_ema - long_ema
-        macd_list = self.macd['MACD'][-signal_term:].to_list()
-        print(short_ema)
-        print(long_ema)
-        print(macd_list)
-        macd_list = macd_list.append(macd)
-        signal = pd.DataFrame(macd_list).mean()
-        hist = macd - signal
-        before_hist = self.macd['Hist'].iloc[-1]
-        #if hist > before_hist:
-        #    crossover = 1
-        #elif hist < before_hist:
-        #    crossover = -1
-        #else:
-        #    crossover = 0
-        macd_dict = {
-            'Datetime':datetime_,
-            'ShortEMA':short_ema,
-            'LongEMA':long_ema,
-            'MACD':macd,
-            'Signal':signal,
-            'Hist':hist,
-            #'Crossover':crossover,
-        }
-        self.macd = self.macd.append(macd_dict, ignore_index=True)
 
-    def trim(
-        self,
-        df,
-        term
-    ):
-        if term < len(df):
-            df = df.drop_duplicates()
-            df = df[-(term-1):]
-        return df
+'''
+columns=['number','name']
+array=[
+    [1,2,3,4,5,6,7,8,9,10],
+    ['a','b','c','d','e','f','g','h','i','j']
+]
+narray_t=np.array(array).T.tolist()
+df=pd.DataFrame(narray_t, columns=columns)
+print(df.tail(5))
+print(type(df.tail(5)))
 '''
 

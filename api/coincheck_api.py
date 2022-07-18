@@ -29,7 +29,6 @@ class Path:
     trades='/api/trades'
     order='/api/exchange/orders'
     balance='/api/accounts/balance'
-    #transaction='/api/exchange/orders/transactions'
     transaction='/api/exchange/orders/transactions'
     cancel_status='/api/exchange/orders/cancel_status'
     unsettled_order='/api/exchange/orders/opens'
@@ -39,7 +38,7 @@ class WebsocketClient:
         self.pair='btc_jpy'
         #time_scale_list=[1,5,15,30]
         self.WURL='wss://ws-api.coincheck.com/'
-        self.storage_term=[10, 60, 300, 900] #保存期間
+        #self.storage_term=[10, 60, 300, 900] #保存期間
         self.request_json = json.dumps({
             'type':'subscribe', 
             'channel':'btc_jpy-trades'
@@ -49,14 +48,19 @@ class WebsocketClient:
         self.crypto=crypto.Crypto()
         self.account=account.Account()
 
+    def heart_beat(
+        self,
+        beat='.'
+    ):
+        print(beat,end='')
+
     def connect(self):  #スレッド①
         self.session=websocket.WebSocketApp(
             self.WURL,
             on_open=self.__on_open,
             on_close=self.__on_close,
             on_error=self.__on_error,
-            on_message=self.__on_message,
-        )
+            on_message=self.__on_message)
         print('session connect.')
         self.session.run_forever()
     #接続
@@ -89,24 +93,25 @@ class WebsocketClient:
         time.sleep(0.25)
         print(*self.crypto.trade.values[-1])
 
-    def cast(self):  #スレッド②
+    def cast(self): #スレッド②
         while True:
             now=datetime.datetime.now()
             self.start_time=datetime.datetime(
                 now.year, now.month, now.day,
-                now.hour, now.minute, floor(now.second/10)*10
-            )
-            self.end_time=datetime.datetime(
-                now.year, now.month, now.day,
-                now.hour, now.minute, floor(now.second/10)*10
-            )+datetime.timedelta(seconds=10)
+                now.hour, now.minute, int(now.second/10)*10)
+            self.end_time=self.start_time+datetime.timedelta(seconds=10)
             while datetime.datetime.now() < self.end_time:
                 time.sleep(0.5)
             self.lock.acquire() #施錠
-            self.crypto.cast_ohlcv(self.start_time, self.end_time)
-            print(self.crypto.ohlcv)
+            self.heart_beat(beat='② ')
+            self.crypto.cast_ohlcv(self.start_time, self.end_time); print(self.crypto.ohlcv)
+            self.crypto.cast_bb(datetime_=self.start_time); print(self.crypto.bb)
+            self.crypto.cast_rsi(datetime_=self.start_time); print(self.crypto.rsi)
+            self.crypto.cast_macd(datetime_=self.start_time); print(self.crypto.macd)
             self.crypto.forget_trade()
             self.lock.release() #施錠
+
+
 
 class HttpClient(WebsocketClient):
     def __init__(self, websocket_client):
@@ -248,8 +253,7 @@ class HttpClient(WebsocketClient):
             end_time=start_time+datetime.timedelta(seconds=10)
             self.crypto.trade=trades.query('@start_time <= Datetime < @end_time')
             trades=trades.query('@end_time <= Datetime')
-            print(start_time)
-            print(self.crypto.trade)
+            print(start_time); print(self.crypto.trade)
             if len(trades) != 0:
                 trades.reset_index()
                 self.crypto.cast_ohlcv(start_time, end_time)

@@ -49,19 +49,16 @@ class Brain:
         tran_df=self.cchc.form_transaction(tran_list)
         balance_=self.cchc.get_balance_until_true()
         balance_dict=self.cchc.account.form_balance(balance_)
-        self.cchc.account.balance=self.cchc.account.balance.append(
-            balance_dict, ignore_index=True)
+        self.cchc.account.balance=self.cchc.account.balance.append(balance_dict, ignore_index=True)
         self.cchc.account.calc_balance(tran_df)
         #self.cchc.account.balance=self.cchc.account.balance.query('JPY > 25000')
         self.cchc.account.balance=self.cchc.account.balance.reset_index(drop=True)
-        print(self.cchc.account.balance)
-        trade_list=self.cchc.get_trade_list(
-            limit=100,)
+        trade_list=self.cchc.get_trade_list(limit=100)
         trade_df, start_id, end_id = self.cchc.crypto.form_trade_list(trade_list)
-        self.cchc.split_trades_into_ohlcv(trade_df)
-        print(self.cchc.crypto.ohlcv.tail(20))
-
-
+        self.cchc.split_trades_into_ohlcv(trade_df); print(self.cchc.crypto.ohlcv.tail(15))
+        self.cchc.crypto.init_bb(); print(self.cchc.crypto.bb)
+        self.cchc.crypto.init_rsi(); print(self.cchc.crypto.rsi)
+        self.cchc.crypto.init_macd(); print(self.cchc.crypto.macd)
 
     def check_balance(
         self,
@@ -77,7 +74,6 @@ class Brain:
         self.jpy=float(balance_dict['JPY'])
         self.btc=float(balance_dict['BTC'])
         self.bid=self.btc*bid_per_amount
-        
         if self.jpy >= self.ask:
             self.buy_flg=True
             print('購入可能です.')
@@ -96,8 +92,7 @@ class Brain:
         if self.buy_flg == True:
             while True:
                 result=self.cchc.post_market_buy(
-                    market_buy_amount=self.ask
-                );print('.', end='')
+                    market_buy_amount=self.ask);print('.', end='')
                 if result['success'] == True:
                     break
             print('購入結果:')
@@ -106,8 +101,7 @@ class Brain:
         elif self.sell_flg == True:
             while True:
                 result=self.cchc.post_market_sell(
-                    amount=self.bid
-                );print('.', end='')
+                    amount=self.bid);print('.', end='')
                 if result['success'] == True:
                     break
             print('売却結果:')
@@ -122,24 +116,58 @@ class Brain:
 
     def draw(self):
         while True:
-            time.sleep(5)
+            now=datetime.datetime.now()
+            second_=int(now.second/10)*10
+            start_time=datetime.datetime(
+                now.year, now.month, now.day,
+                now.hour, now.minute, second_)
+            end_time=start_time+datetime.timedelta(seconds=10)
+            while datetime.datetime.now() < end_time:
+                time.sleep(5)
+            self.cchc.heart_beat(beat='③ ')
             self.plot_graph()
+            print('plotted.')
 
     def plot_graph(self):
         path='graph.png'
+        self.axes[0].cla()
+        self.axes[1].cla()
+        self.axes[2].cla()
         self.axes[0].plot(
             self.cchc.crypto.ohlcv['Datetime'],
             self.cchc.crypto.ohlcv['Close'],
             linewidth=1/2,
             color="#808080")
+        self.axes[0].fill_between(
+            self.cchc.crypto.bb['Datetime'],
+            self.cchc.crypto.bb['pBB'],
+            self.cchc.crypto.bb['mBB'],
+            alpha=0.5,
+            facecolor='#606060')
+        self.axes[1].fill_between(
+            self.cchc.crypto.macd['Datetime'],
+            self.cchc.crypto.macd['Signal'],
+            alpha=0.5,
+            linewidth=1/2,
+            color="#404040")
         self.axes[2].plot(
-            self.cchc.account.balance['Datetime'],
-            self.cchc.account.balance['JPY'],
-            color="#808080",
-            linewidth=1/2
-        )
+            self.cchc.crypto.rsi['Datetime'],
+            self.cchc.crypto.rsi['RSI'],
+            alpha=0.5,
+            linewidth=1/2,
+            color="#202020")
+        self.axes[0].grid(alpha=1/4)
+        self.axes[1].grid(alpha=1/4)
+        self.axes[2].grid(alpha=1/4)
+        #self.axes[2].plot(
+        #    self.cchc.account.balance['Datetime'],
+        #    self.cchc.account.balance['JPY'],
+        #    color="#808080",
+        #    linewidth=1/2)
         self.figure.canvas.draw()
+        self.figure.canvas.flush_events()
         self.figure.savefig(path)
+        plt.show()
 
     def dominate(self):
         with ThreadPoolExecutor(max_workers=3) as executor:
@@ -154,18 +182,16 @@ def main():
     brain.give_key_to_api(
         KEY.COINCHECK_API_ACCESS,
         KEY.COINCHECK_API_SECRET,
-        KEY.LINE_API_TOKEN,
-    )
+        KEY.LINE_API_TOKEN)
     trade_dict_list=brain.cchc.get_trade_list(
         limit=100,
         order='desc',
         starting_after=None,
-        ending_before=None
-    )
+        ending_before=None)
     for trade_dict in trade_dict_list:
-        print(trade_dict)
+        brain.cchc.crypto.trade=brain.cchc.crypto.trade.append(
+            trade_dict, ignore_index=True)
     brain.initialize_table()
-    brain.plot_graph()
     brain.dominate()
 
 if __name__ == "__main__":
@@ -175,4 +201,5 @@ if __name__ == "__main__":
     ALPHA=configure.FORM.alpha
     LABEL=configure.FORM.label
     main()
+
 
